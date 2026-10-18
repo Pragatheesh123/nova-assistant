@@ -41,6 +41,7 @@ sealed class Command {
     data class Navigate(val place: String) : Command()
     data class Search(val query: String) : Command()
     data class YouTube(val query: String) : Command()
+    data class YouTubeChannel(val name: String) : Command()
     data class Note(val text: String) : Command()
     object ReadNotes : Command()
     object Time : Command()
@@ -57,8 +58,10 @@ sealed class Command {
 data class Outcome(
     val say: String,
     val launch: Intent? = null,
-    val confirm: (() -> Outcome)? = null,
+    val confirm: (suspend () -> Outcome)? = null,
     val confirmLabel: String = "",
+    val cancelLabel: String = "Cancel",
+    val warning: List<String> = emptyList(), // leak guard findings -> red pop-up, auto-abort
 )
 
 class Actions(private val ctx: Context) {
@@ -79,6 +82,7 @@ class Actions(private val ctx: Context) {
             is Command.Navigate -> Outcome("Getting directions to ${c.place}.", navigateIntent(c.place))
             is Command.Search -> search(c.query)
             is Command.YouTube -> youtube(c.query)
+            is Command.YouTubeChannel -> youtubeChannel(c.name)
             is Command.Note -> {
                 val stamp = SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date())
                 prefs.notes = (prefs.notes + "\n$stamp — ${c.text}").trim()
@@ -250,6 +254,14 @@ class Actions(private val ctx: Context) {
         val i = if (app.resolveActivity(ctx.packageManager) != null) app
         else Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(q)))
         return Outcome("Finding $q on YouTube.", i)
+    }
+
+    private fun youtubeChannel(name: String): Outcome {
+        // YouTube search filtered to channels; the channel is the first result.
+        val url = "https://www.youtube.com/results?search_query=" + Uri.encode(name) + "&sp=EgIQAg%253D%253D"
+        val app = Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage("com.google.android.youtube")
+        val i = if (app.resolveActivity(ctx.packageManager) != null) app else Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        return Outcome("Here's the $name channel on YouTube.", i)
     }
 
     private fun settingsPanel(which: String): Outcome {

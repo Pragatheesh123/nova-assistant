@@ -80,6 +80,15 @@ object Commands {
         Regex("^(?:navigate|directions|take me|drive|get me|show me the way|how do i get) (?:to )?(.+)$").find(t)?.let {
             return Command.Navigate(it.groupValues[1])
         }
+        Regex("^(?:open |go to |launch )?(?:youtube|yt) (?:and |then )?(?:go to|open|show(?: me)?|find) (.+?)(?:'s|s')? (?:youtube )?channel$").find(t)?.let {
+            return Command.YouTubeChannel(it.groupValues[1])
+        }
+        Regex("^(?:go to|open|show(?: me)?|find) (.+?)(?:'s|s')? (?:youtube |yt )?channel(?: on (?:youtube|yt))?$").find(t)?.let {
+            return Command.YouTubeChannel(it.groupValues[1])
+        }
+        Regex("^(?:open |go to |launch )?(?:youtube|yt) (?:and |then )?(?:search|look up|find|play)(?: for)? (.+)$").find(t)?.let {
+            return Command.YouTube(it.groupValues[1])
+        }
         Regex("^play (.+?) on youtube$").find(t)?.let { return Command.YouTube(it.groupValues[1]) }
         Regex("^(?:youtube|search youtube for) (.+)$").find(t)?.let { return Command.YouTube(it.groupValues[1]) }
         Regex("^(?:search|google|look up|search for|search the web for) (.+)$").find(t)?.let {

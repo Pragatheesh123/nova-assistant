@@ -76,6 +76,9 @@ class AssistActivity : ComponentActivity() {
     private var answer by mutableStateOf("")
     private var confirm by mutableStateOf<Outcome?>(null)
     private var typing by mutableStateOf(false)
+    private var step by mutableStateOf("")
+    private var abortIn by mutableStateOf(0)
+    private var abortTimer: Job? = null
 
     private lateinit var speaker: Speaker
     private lateinit var listener: Listener
@@ -111,6 +114,7 @@ class AssistActivity : ComponentActivity() {
 
     private fun listen() {
         closer?.cancel()
+        abortTimer?.cancel(); abortIn = 0
         speaker.stop()
         confirm = null
         typing = false
@@ -140,7 +144,12 @@ class AssistActivity : ComponentActivity() {
         orb = OrbState.Thinking
         answer = ""
         lifecycleScope.launch {
-            val out = try { brain.handle(text) } catch (e: Exception) { Outcome("Sorry, something went wrong.") }
+            val out = try {
+                brain.handle(text) { s -> runOnUiThread { step = s } }
+            } catch (e: Exception) {
+                Outcome("Sorry, something went wrong.")
+            }
+            step = ""
             present(out)
         }
     }
@@ -151,12 +160,47 @@ class AssistActivity : ComponentActivity() {
             confirm = out
             orb = OrbState.Idle
             speaker.say(out.say)
+            if (out.warning.isNotEmpty()) startAbortCountdown()
             return
         }
         val launched = out.launch?.let { Actions.safeStart(this, it) } ?: false
         if (out.launch != null && !launched) answer = "I couldn't find an app on your phone for that."
         orb = OrbState.Speaking
         speaker.say(answer) { runOnUiThread { autoClose(if (launched) 300 else 3500) } }
+    }
+
+    /** Leak warnings abort on their own if you don't answer. */
+    private fun startAbortCountdown() {
+        abortTimer?.cancel()
+        closer?.cancel()
+        abortTimer = lifecycleScope.launch {
+            for (s in 25 downTo 1) { abortIn = s; delay(1000) }
+            abortIn = 0
+            if (confirm != null) cancelConfirm(timedOut = true)
+        }
+    }
+
+    private fun cancelConfirm(timedOut: Boolean = false) {
+        val wasWarning = confirm?.warning?.isNotEmpty() == true
+        abortTimer?.cancel(); abortIn = 0
+        confirm = null
+        answer = when {
+            wasWarning && timedOut -> "No answer, so I aborted. Nothing was sent."
+            wasWarning -> "Aborted. Nothing was sent."
+            else -> "Okay, cancelled."
+        }
+        speaker.say(answer)
+        autoClose(2500)
+    }
+
+    private fun acceptConfirm(c: Outcome) {
+        abortTimer?.cancel(); abortIn = 0
+        confirm = null
+        orb = OrbState.Thinking
+        lifecycleScope.launch {
+            val out = try { c.confirm!!.invoke() } catch (e: Exception) { Outcome("Sorry, that didn't work.") }
+            present(out)
+        }
     }
 
     private fun autoClose(ms: Long) {
@@ -226,6 +270,10 @@ class AssistActivity : ComponentActivity() {
                                 Spacer(Modifier.height(4.dp))
                                 Text("“$heard”", style = Nova.body, maxLines = 3)
                             }
+                            if (step.isNotEmpty()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(step, style = Nova.kicker.copy(letterSpacing = 1.sp))
+                            }
                         }
                         RoundIcon("⌨") { userTouched(); listener.stop(); orb = OrbState.Idle; typing = !typing }
                     }
@@ -236,12 +284,34 @@ class AssistActivity : ComponentActivity() {
                     }
 
                     confirm?.let { c ->
+                        if (c.warning.isNotEmpty()) {
+                            Spacer(Modifier.height(14.dp))
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0x1AFF5A46), RoundedCornerShape(18.dp))
+                                    .border(1.dp, Color(0x73FF5A46), RoundedCornerShape(18.dp))
+                                    .padding(14.dp),
+                            ) {
+                                Text("⚠  DATA ABOUT TO LEAVE YOUR PHONE", style = Nova.kicker.copy(color = Color(0xFFFF7A66), letterSpacing = 1.5.sp))
+                                for (w in c.warning) {
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(w, style = Nova.body.copy(color = Nova.Pearl))
+                                }
+                                if (abortIn > 0) {
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("Aborting automatically in ${abortIn}s", style = Nova.body.copy(fontSize = 12.sp, color = Nova.Pearl3))
+                                }
+                            }
+                        }
                         Spacer(Modifier.height(16.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Pill("Cancel", solid = false, Modifier.weight(1f)) { confirm = null; answer = "Okay, cancelled."; autoClose(1200) }
-                            Pill(c.confirmLabel.ifEmpty { "Yes" }, solid = true, Modifier.weight(1f)) {
-                                confirm = null
-                                present(c.confirm!!.invoke())
+                            if (c.warning.isNotEmpty()) {
+                                Pill(c.confirmLabel.ifEmpty { "Yes" }, solid = false, Modifier.weight(1f)) { acceptConfirm(c) }
+                                Pill(c.cancelLabel, solid = true, Modifier.weight(1f)) { cancelConfirm() }
+                            } else {
+                                Pill(c.cancelLabel, solid = false, Modifier.weight(1f)) { cancelConfirm() }
+                                Pill(c.confirmLabel.ifEmpty { "Yes" }, solid = true, Modifier.weight(1f)) { acceptConfirm(c) }
                             }
                         }
                     }
