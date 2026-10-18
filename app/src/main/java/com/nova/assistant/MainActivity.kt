@@ -90,7 +90,6 @@ class MainActivity : ComponentActivity() {
         add(Manifest.permission.RECORD_AUDIO)
         add(Manifest.permission.READ_CONTACTS)
         add(Manifest.permission.CALL_PHONE)
-        add(Manifest.permission.SEND_SMS)
         if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
     }.toTypedArray()
 
@@ -206,7 +205,7 @@ class MainActivity : ComponentActivity() {
 
             Step(
                 n = 1, done = allPerms, title = "Allow access",
-                text = "Microphone to hear you; contacts, calls and texts so Nova can reach people for you.",
+                text = "Microphone to hear you; contacts and calls so Nova can reach people for you.",
             ) {
                 if (!allPerms) Pill("Allow", solid = true, Modifier.fillMaxWidth()) { permLauncher.launch(wantedPerms) }
             }

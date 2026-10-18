@@ -18,7 +18,6 @@ import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
-import android.telephony.SmsManager
 import android.view.KeyEvent
 import androidx.core.content.ContextCompat
 import com.nova.assistant.Prefs
@@ -150,20 +149,10 @@ class Actions(private val ctx: Context) {
 
     private fun text(who: String, body: String): Outcome {
         val c = findContact(who) ?: return noContact(who)
-        if (!has(Manifest.permission.SEND_SMS)) {
-            val i = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(c.number))).putExtra("sms_body", body)
-            return Outcome("Here's your message to ${c.name}.", i)
-        }
-        return Outcome(
-            say = "Send \"$body\" to ${c.name}?",
-            confirmLabel = "Send",
-            confirm = {
-                @Suppress("DEPRECATION")
-                val sms = if (Build.VERSION.SDK_INT >= 31) ctx.getSystemService(SmsManager::class.java) else SmsManager.getDefault()
-                sms.sendMultipartTextMessage(c.number, null, sms.divideMessage(body), null, null)
-                Outcome("Sent.")
-            },
-        )
+        // Opens your messaging app with the text ready; you tap send. (Sending silently needs
+        // the SMS permission, which makes Android's Play Protect block the install.)
+        val i = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(c.number))).putExtra("sms_body", body)
+        return Outcome("Here's your message to ${c.name}. Tap send.", i)
     }
 
     private fun whatsapp(who: String, body: String): Outcome {
