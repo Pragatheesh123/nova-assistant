@@ -16,7 +16,7 @@ The AI model, speech recognition and your notes all stay on your own machine. No
 ## PC setup (Windows, one time, ~15 minutes)
 
 1. **Python:** install from https://www.python.org/downloads/ and **tick "Add python.exe to PATH"**.
-2. **Ollama (the AI brain):** install from https://ollama.com, then open a terminal and run:
+2. **Ollama (optional offline backup brain):** install from https://ollama.com, then open a terminal and run:
    ```
    ollama pull qwen3:8b
    ```
