@@ -40,17 +40,33 @@ class Speaker(context: Context, private val onState: (speaking: Boolean) -> Unit
         cb?.invoke()
     }
 
+    /** English voices installed on this phone that work offline. */
+    fun voices(): List<Voice> = try {
+        (tts.voices ?: emptySet()).filter {
+            it.locale.language == "en" && !it.isNetworkConnectionRequired &&
+                it.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true
+        }.sortedWith(compareBy({ it.locale.country != "GB" }, { it.name }))
+    } catch (e: Exception) { emptyList() }
+
     private fun pickVoice() {
-        val locale = if (prefs.britishVoice) Locale.UK else Locale.US
-        tts.language = locale
-        val voices: Set<Voice> = try { tts.voices ?: emptySet() } catch (e: Exception) { emptySet() }
-        val best = voices
-            .filter { it.locale.language == "en" && it.locale.country == locale.country && !it.isNetworkConnectionRequired }
-            .filter { it.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true }
-            .maxByOrNull { it.quality }
-        if (best != null) tts.voice = best
-        tts.setSpeechRate(1.0f)
-        tts.setPitch(0.95f)
+        val uk = prefs.britishVoice
+        tts.language = if (uk) Locale.UK else Locale.US
+        val all = voices()
+        val chosen = all.firstOrNull { it.name == prefs.voiceName }
+            // Jarvis-ish: a British male voice. Google's offline UK male voices are rjs, gbd and gbb.
+            ?: all.filter { it.locale.country == (if (uk) "GB" else "US") }.let { local ->
+                local.firstOrNull { v -> listOf("rjs", "gbd", "gbb", "male").any { v.name.contains(it, ignoreCase = true) } }
+                    ?: local.maxByOrNull { it.quality }
+            }
+        if (chosen != null) tts.voice = chosen
+        // a little deeper and more measured than the default
+        tts.setPitch(0.86f)
+        tts.setSpeechRate(0.96f)
+    }
+
+    fun use(v: Voice) {
+        prefs.voiceName = v.name
+        pickVoice()
     }
 
     fun say(text: String, then: (() -> Unit)? = null) {

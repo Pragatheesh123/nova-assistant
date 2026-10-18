@@ -20,9 +20,66 @@ import java.util.Locale
  */
 class Brain(private val ctx: Context) {
     private val actions = Actions(ctx)
+    private val profile = Profile(ctx)
 
-    /** [onStep] shows progress in the pop-up ("Looking it up…"). */
-    suspend fun handle(text: String, onStep: (String) -> Unit = {}): Outcome {
+    /**
+     * [onStep] shows progress in the pop-up ("Thinking…"). [cues] describes how it was said
+     * ("quieter than usual"). With a Claude key and internet, everything goes to Claude; otherwise
+     * Nova falls back to its offline commands and on-device model.
+     */
+    suspend fun handle(text: String, onStep: (String) -> Unit = {}, cues: String = ""): Outcome {
+        val key = com.nova.assistant.Prefs(ctx).claudeKey
+        if (key.isNotBlank() && WebLookup.online(ctx)) {
+            val findings = Guard.scan(text)
+            if (findings.isNotEmpty()) return warn(findings, "Claude (the cloud)") { cloudTurn(key, text, onStep, cues) }
+            return cloudTurn(key, text, onStep, cues)
+        }
+        return handleLocal(text, onStep)
+    }
+
+    // ------------------------------------------------------------------ cloud (Claude)
+
+    private suspend fun cloudTurn(key: String, text: String, onStep: (String) -> Unit, cues: String): Outcome {
+        onStep("Thinking…")
+        val claude = claudeFor(key)
+        val now = SimpleDateFormat("EEEE d MMMM yyyy, h:mm a", Locale.getDefault()).format(Date())
+        val line = "[$now · on their phone" + (if (cues.isNotBlank()) " · voice: $cues" else "") + "]\n$text"
+        val system = PhoneTools.PERSONA + profile.describe().let { if (it.isBlank()) "" else "\n\n$it" }
+        val reply = try {
+            claude.think(system, line, PhoneTools.SPECS, PhoneTools.isQuestion(text)) { name, args -> runTool(name, args, onStep) }
+        } catch (i: ClaudeBrain.Interrupt) {
+            return i.payload as Outcome
+        }
+        return Outcome(reply)
+    }
+
+    /** Runs one tool Claude asked for and returns the result text it gets back. */
+    private suspend fun runTool(name: String, a: Map<String, Any?>, onStep: (String) -> Unit): String {
+        fun str(k: String) = a[k]?.toString().orEmpty()
+        fun num(k: String) = (a[k] as? Number)?.toInt() ?: a[k]?.toString()?.toDoubleOrNull()?.toInt()
+        when (name) {
+            "remember" -> return profile.remember(str("fact"))
+            "forget" -> return profile.forget(str("about"))
+            "save_routine" -> return profile.saveRoutine(str("name"), str("trigger"), (a["steps"] as? List<*>)?.map { it.toString() }.orEmpty())
+            "delete_routine" -> return profile.deleteRoutine(str("name"))
+            "run_routine" -> return profile.routineSteps(str("name"))
+        }
+        val cmd = PhoneTools.toCommand(name, a, ::str, ::num) ?: return "Unknown tool $name."
+        onStep(PhoneTools.stepLabel(name, a))
+        val out = guarded(cmd)
+        if (out.confirm != null) throw ClaudeBrain.Interrupt(out) // leak guard: the user decides
+        var result = out.say
+        out.launch?.let { i ->
+            val ok = withContext(Dispatchers.Main) { Actions.safeStart(ctx, i) }
+            if (!ok) result = "Couldn't open an app for that."
+        }
+        out.after?.let { after -> after()?.let { result += " " + it } }
+        return result.ifBlank { "Done." }
+    }
+
+    // ------------------------------------------------------------------ offline
+
+    private suspend fun handleLocal(text: String, onStep: (String) -> Unit): Outcome {
         Commands.parse(text)?.let { cmd -> return guarded(cmd) }
 
         // Questions about the world: look them up so the answer is current and correct.
@@ -160,5 +217,13 @@ class Brain(private val ctx: Context) {
 
     companion object {
         private val history = mutableListOf<Pair<String, String>>()
+        private var claude: ClaudeBrain? = null
+        private var claudeKey = ""
+
+        @Synchronized
+        fun claudeFor(key: String): ClaudeBrain {
+            if (claude == null || claudeKey != key) { claude = ClaudeBrain(key); claudeKey = key }
+            return claude!!
+        }
     }
 }

@@ -43,7 +43,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -123,6 +127,9 @@ class MainActivity : ComponentActivity() {
         var wake by remember { mutableStateOf(prefs.wakeWord) }
         var uk by remember { mutableStateOf(prefs.britishVoice) }
         var copying by remember { mutableStateOf(false) }
+        var keyText by remember { mutableStateOf("") }
+        var hasKey by remember { mutableStateOf(prefs.claudeKey.isNotBlank()) }
+        var voiceLabel by remember { mutableStateOf(prefs.voiceName.ifEmpty { "Automatic (British male)" }) }
 
         val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { tick++ }
         val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -195,7 +202,7 @@ class MainActivity : ComponentActivity() {
 
         val handsIn = Hands.installed(this)
         val handsOn = Hands.enabled(this)
-        val ready = listOf(allPerms, overlayOk, isDefault, modelOk, wake && voskOk, handsIn && handsOn).count { it }
+        val ready = listOf(allPerms, hasKey, overlayOk, isDefault, wake && voskOk, handsIn && handsOn).count { it }
 
         Column(
             Modifier
@@ -235,7 +242,40 @@ class MainActivity : ComponentActivity() {
             }
 
             Step(
-                n = 2, done = overlayOk, title = "Floating panel",
+                n = 2, done = hasKey, title = "Cloud brain · Claude",
+                text = if (hasKey) "Connected. Nova thinks with Claude: real conversation, web search, emotion-aware replies. " +
+                    "Your words go to Anthropic to be answered; the leak guard checks them first."
+                else "Paste your Anthropic API key (console.anthropic.com › API keys). It's stored only on this phone. " +
+                    "Without it Nova uses offline commands.",
+            ) {
+                if (!hasKey) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Nova.Surface, RoundedCornerShape(14.dp))
+                            .border(1.dp, Nova.Line, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 14.dp, vertical = 14.dp),
+                    ) {
+                        if (keyText.isEmpty()) Text("sk-ant-…", style = Nova.body.copy(color = Nova.Pearl3))
+                        BasicTextField(
+                            value = keyText, onValueChange = { keyText = it.trim() }, singleLine = true,
+                            textStyle = TextStyle(color = Nova.Pearl, fontSize = 15.sp),
+                            cursorBrush = SolidColor(Nova.Pearl),
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Pill("Save key", solid = true, Modifier.fillMaxWidth()) {
+                        if (keyText.startsWith("sk-")) { prefs.claudeKey = keyText; keyText = ""; hasKey = true }
+                    }
+                } else {
+                    Pill("Remove key", solid = false, Modifier.fillMaxWidth()) { prefs.claudeKey = ""; hasKey = false }
+                }
+            }
+
+            Step(
+                n = 3, done = overlayOk, title = "Floating panel",
                 text = if (overlayOk) "Done. Nova appears on top of any app when you call it."
                 else "Allow “Display over other apps” so Nova's panel pops up over whatever you're doing.",
             ) {
@@ -245,33 +285,12 @@ class MainActivity : ComponentActivity() {
             }
 
             Step(
-                n = 3, done = isDefault, title = "Power-button assistant",
+                n = 4, done = isDefault, title = "Power-button assistant",
                 text = if (isDefault) "Done. Hold the power button (or swipe up from a bottom corner) to call Nova."
                 else "Choose Nova under “Digital assistant app”. Then holding the power button calls Nova instead of Google.\n" +
                     "Samsung: also Settings › Advanced features › Side button › Press and hold › Digital assistant.",
             ) {
                 if (!isDefault) Pill("Open settings", solid = true, Modifier.fillMaxWidth()) { openAssistantSettings() }
-            }
-
-            Step(
-                n = 4, done = modelOk, title = "AI brain",
-                text = when {
-                    copying -> modelMsg
-                    modelMsg.isNotEmpty() -> modelMsg
-                    modelOk -> "Installed (${modelSize / 1_000_000} MB). Nova can chat and understand loose wording."
-                    else -> "A ~1.6 GB AI model that runs on your phone. Best on Wi-Fi. Commands work without it."
-                },
-            ) {
-                if (!modelOk && prefs.modelDownloadId < 0 && !copying) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Pill("Choose file", solid = false, Modifier.weight(1f)) { pickModel.launch(arrayOf("*/*")) }
-                        Pill("Download", solid = true, Modifier.weight(1f)) {
-                            prefs.modelUrl = Prefs.DEFAULT_MODEL_URL
-                            prefs.modelDownloadId = Downloads.start(this@MainActivity, prefs.modelUrl, "model.download", "Nova AI brain")
-                            modelMsg = "Starting download…"
-                        }
-                    }
-                }
             }
 
             Step(
@@ -331,15 +350,48 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            Step(n = 7, done = true, title = "Voice", text = if (uk) "British English" else "American English") {
+            Step(n = 7, done = true, title = "Voice", text = "$voiceLabel · works offline") {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Pill(if (uk) "Switch to US" else "Switch to UK", solid = false, Modifier.weight(1f)) {
-                        uk = !uk; prefs.britishVoice = uk
-                        speaker?.shutdown(); speaker = null
+                    Pill("Next voice", solid = false, Modifier.weight(1f)) {
+                        val s = speaker ?: Speaker(this@MainActivity) {}.also { speaker = it }
+                        val all = s.voices()
+                        if (all.isNotEmpty()) {
+                            val next = all[(all.indexOfFirst { it.name == prefs.voiceName } + 1) % all.size]
+                            s.use(next)
+                            voiceLabel = "${next.name} (${next.locale.displayCountry})"
+                            s.say("Good evening. This is how I'd sound.")
+                        }
                     }
                     Pill("Test voice", solid = true, Modifier.weight(1f)) {
                         val s = speaker ?: Speaker(this@MainActivity) {}.also { speaker = it }
-                        s.say("Good to meet you. I'm Nova. All systems are online.")
+                        s.say("Good evening, sir. All systems are online, and I'm at your service.")
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Pill("Auto British male", solid = false, Modifier.fillMaxWidth()) {
+                    prefs.voiceName = ""; prefs.britishVoice = true; uk = true
+                    voiceLabel = "Automatic (British male)"
+                    speaker?.shutdown(); speaker = null
+                }
+            }
+
+            Step(
+                n = 8, done = modelOk, title = "Offline backup brain (optional)",
+                text = when {
+                    copying -> modelMsg
+                    modelMsg.isNotEmpty() -> modelMsg
+                    modelOk -> "Installed (${modelSize / 1_000_000} MB). Used when there's no internet."
+                    else -> "A small ~1.6 GB model for when you're offline. Optional: Claude is far smarter."
+                },
+            ) {
+                if (!modelOk && prefs.modelDownloadId < 0 && !copying) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Pill("Choose file", solid = false, Modifier.weight(1f)) { pickModel.launch(arrayOf("*/*")) }
+                        Pill("Download", solid = true, Modifier.weight(1f)) {
+                            prefs.modelUrl = Prefs.DEFAULT_MODEL_URL
+                            prefs.modelDownloadId = Downloads.start(this@MainActivity, prefs.modelUrl, "model.download", "Nova AI brain")
+                            modelMsg = "Starting download…"
+                        }
                     }
                 }
             }

@@ -12,8 +12,8 @@ android {
         applicationId = "com.nova.assistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.0"
+        versionCode = 5
+        versionName = "3.0"
         ndk { abiFilters += "arm64-v8a" } // every modern phone; keeps the app small
     }
 
@@ -49,6 +49,13 @@ android {
     }
     packaging {
         jniLibs { useLegacyPackaging = true }
+        resources {
+            excludes += setOf(
+                "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/INDEX.LIST",
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA",
+            )
+            pickFirsts += setOf("META-INF/*.kotlin_module", "META-INF/io.netty.versions.properties")
+        }
     }
 }
 
@@ -64,6 +71,8 @@ dependencies {
 
     // On-device AI model runtime
     implementation("com.google.mediapipe:tasks-genai:0.10.24")
+    // Cloud brain (Claude)
+    implementation("com.anthropic:anthropic-java:2.73.0")
     // Offline "Hey Nova" wake word
     implementation("com.alphacephei:vosk-android:0.3.75")
     implementation("net.java.dev.jna:jna:5.18.1@aar")

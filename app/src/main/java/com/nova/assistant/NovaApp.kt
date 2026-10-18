@@ -60,6 +60,25 @@ class Prefs(context: Context) {
         get() = p.getLong("voskDl", -1)
         set(v) = p.edit().putLong("voskDl", v).apply()
 
+    var claudeKey: String
+        get() = p.getString("claudeKey", "") ?: ""
+        set(v) = p.edit().putString("claudeKey", v.trim()).apply()
+
+    /** Chosen TTS voice name ("" = automatic British male). */
+    var voiceName: String
+        get() = p.getString("voiceName", "") ?: ""
+        set(v) = p.edit().putString("voiceName", v).apply()
+
+    /** JSON {facts:[...], routines:[{name,trigger,steps:[...]}]} */
+    var profile: String
+        get() = p.getString("profile", "") ?: ""
+        set(v) = p.edit().putString("profile", v).apply()
+
+    /** JSON {loud, speed, n}: the user's normal speaking voice, for tone-of-voice hints. */
+    var voiceBaseline: String
+        get() = p.getString("voiceBase", "") ?: ""
+        set(v) = p.edit().putString("voiceBase", v).apply()
+
     var notes: String
         get() = p.getString("notes", "") ?: ""
         set(v) = p.edit().putString("notes", v).apply()

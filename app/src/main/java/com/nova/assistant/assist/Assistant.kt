@@ -57,10 +57,21 @@ class Assistant(
         onFinal = { t -> main.post { onHeard(t) } },
         onError = { m -> main.post { failed(m) } },
     )
+    // tone of voice: loudness samples while you speak
+    private val levels = ArrayList<Float>()
+    private var speechStart = 0L
+    private var cues = ""
+
     private val listener = Listener(
         ctx,
         onPartial = { heard = it },
-        onLevel = { level = it },
+        onLevel = { l ->
+            level = l
+            if (orb == OrbState.Listening) {
+                levels += l
+                if (l > 0.2f && speechStart == 0L) speechStart = System.currentTimeMillis()
+            }
+        },
         onFinal = { onHeard(it) },
         onError = { failed(it) },
         onBlocked = {
@@ -87,6 +98,7 @@ class Assistant(
         }
         heard = ""
         answer = ""
+        levels.clear(); speechStart = 0L; cues = ""
         orb = OrbState.Listening
         listener.start()
     }
@@ -107,7 +119,33 @@ class Assistant(
             return
         }
         heard = text
+        cues = toneOfVoice(text)
         ask(text)
+    }
+
+    /** "quieter than usual, faster than usual" compared with how this user normally talks. */
+    private fun toneOfVoice(text: String): String {
+        val voiced = levels.filter { it > 0.12f }
+        val secs = if (speechStart > 0) (System.currentTimeMillis() - speechStart) / 1000f else 0f
+        val words = text.trim().split(Regex("\\s+")).size
+        if (voiced.size < 5 || secs < 0.6f) return ""
+        val loud = voiced.average().toFloat()
+        val speed = words / secs
+        val prefs = com.nova.assistant.Prefs(ctx)
+        val b = runCatching { org.json.JSONObject(prefs.voiceBaseline) }.getOrNull()
+        val bl = b?.optDouble("loud", loud.toDouble())?.toFloat() ?: loud
+        val bs = b?.optDouble("speed", speed.toDouble())?.toFloat() ?: speed
+        val n = b?.optInt("n", 0) ?: 0
+        val out = mutableListOf<String>()
+        if (n >= 5) {
+            if (loud > bl * 1.3f) out += "louder than usual" else if (loud < bl * 0.7f) out += "quieter than usual"
+            if (speed > bs * 1.25f) out += "faster than usual" else if (speed < bs * 0.75f) out += "slower than usual"
+        }
+        val k = 0.15f
+        prefs.voiceBaseline = org.json.JSONObject()
+            .put("loud", (bl * (1 - k) + loud * k).toDouble()).put("speed", (bs * (1 - k) + speed * k).toDouble()).put("n", n + 1)
+            .toString()
+        return out.joinToString(", ").ifEmpty { "normal for them" }
     }
 
     fun ask(text: String) {
@@ -117,7 +155,7 @@ class Assistant(
         answer = ""
         turn = scope.launch {
             val out = try {
-                brain.handle(text) { s -> main.post { step = s } }
+                brain.handle(text, { s -> main.post { step = s } }, cues).also { cues = "" }
             } catch (e: Exception) {
                 Outcome("Sorry, something went wrong.")
             }

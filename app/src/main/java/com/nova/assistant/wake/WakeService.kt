@@ -85,7 +85,12 @@ class WakeService : Service(), RecognitionListener {
         if (speech != null) return
         try {
             val m = model ?: Model(modelDir(this).absolutePath).also { model = it }
-            val rec = Recognizer(m, 16000f, "[\"hey nova\", \"nova\", \"okay nova\", \"[unk]\"]")
+            // Sound-alike words soak up near misses (TV, videos) so only a clear "hey nova" wins.
+            val grammar = listOf(
+                "hey nova", "okay nova", "nova", "hey", "okay", "no", "over", "know", "november", "novel", "now",
+                "hey now", "hey no", "a nova", "bossa nova", "casanova", "[unk]",
+            ).joinToString(",", "[", "]") { "\"$it\"" }
+            val rec = Recognizer(m, 16000f, grammar).apply { setWords(true) }
             speech = SpeechService(rec, 16000f).also { it.startListening(this) }
         } catch (e: Exception) {
             stopSelf()
@@ -98,19 +103,28 @@ class WakeService : Service(), RecognitionListener {
         speech = null
     }
 
-    private fun heard(json: String, key: String) {
-        val text = try { JSONObject(json).optString(key) } catch (e: Exception) { "" }
-        if (!text.contains("nova")) return
+    /** Only a complete, confident "hey nova" / "okay nova" counts. */
+    private fun heard(json: String) {
+        val o = try { JSONObject(json) } catch (e: Exception) { return }
+        val text = o.optString("text")
+        if (text != "hey nova" && text != "okay nova") return
+        val words = o.optJSONArray("result") ?: return
+        for (i in 0 until words.length()) if (words.getJSONObject(i).optDouble("conf", 0.0) < 0.8) return
         val now = System.currentTimeMillis()
         if (now - lastTrigger < 3000) return
         lastTrigger = now
         pauseListening()
+        // a short chime so you know it heard you
+        runCatching {
+            android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 60)
+                .startTone(android.media.ToneGenerator.TONE_PROP_ACK, 150)
+        }
         openNova(this)
     }
 
-    override fun onPartialResult(hypothesis: String) = heard(hypothesis, "partial")
-    override fun onResult(hypothesis: String) = heard(hypothesis, "text")
-    override fun onFinalResult(hypothesis: String) = heard(hypothesis, "text")
+    override fun onPartialResult(hypothesis: String) {} // partial guesses caused false pop-ups
+    override fun onResult(hypothesis: String) = heard(hypothesis)
+    override fun onFinalResult(hypothesis: String) = heard(hypothesis)
     override fun onError(exception: Exception) { pauseListening(); startListening() }
     override fun onTimeout() { pauseListening(); startListening() }
 
