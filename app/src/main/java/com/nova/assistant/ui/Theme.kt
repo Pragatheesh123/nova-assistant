@@ -5,6 +5,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
@@ -18,7 +19,10 @@ object Nova {
     val Line = Color(0x17FFFFFF)
     val Surface = Color(0x0BFFFFFF)
 
+    val Red = Color(0xFFFF7A66)
     val kicker = TextStyle(fontSize = 11.sp, letterSpacing = 3.5.sp, color = Pearl3, fontWeight = FontWeight.Normal)
+    /** HUD labels */
+    val mono = TextStyle(fontSize = 10.5.sp, letterSpacing = 2.5.sp, color = Pearl3, fontFamily = FontFamily.Monospace)
     val wordmark = TextStyle(fontSize = 15.sp, letterSpacing = 8.sp, color = Pearl, fontWeight = FontWeight.Light)
     val answer = TextStyle(fontSize = 19.sp, lineHeight = 27.sp, color = Pearl, fontWeight = FontWeight.Light)
     val body = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, color = Pearl2)

@@ -42,6 +42,14 @@ sealed class Command {
     data class Search(val query: String) : Command()
     data class YouTube(val query: String) : Command()
     data class YouTubeChannel(val name: String) : Command()
+    data class YouTubePlay(val query: String) : Command()
+    data class WhatsAppChat(val who: String) : Command()
+    // on-screen control through Nova Hands
+    data class Tap(val target: String) : Command()
+    data class TypeText(val text: String) : Command()
+    data class Scroll(val down: Boolean) : Command()
+    data class Global(val action: String) : Command() // back, home, recents, notifications, quick_settings
+    object ReadScreen : Command()
     data class Note(val text: String) : Command()
     object ReadNotes : Command()
     object Time : Command()
@@ -62,6 +70,8 @@ data class Outcome(
     val confirmLabel: String = "",
     val cancelLabel: String = "Cancel",
     val warning: List<String> = emptyList(), // leak guard findings -> red pop-up, auto-abort
+    /** Runs after [launch] (e.g. press Send in WhatsApp). A returned string is spoken. */
+    val after: (suspend () -> String?)? = null,
 )
 
 class Actions(private val ctx: Context) {
@@ -83,6 +93,21 @@ class Actions(private val ctx: Context) {
             is Command.Search -> search(c.query)
             is Command.YouTube -> youtube(c.query)
             is Command.YouTubeChannel -> youtubeChannel(c.name)
+            is Command.YouTubePlay -> youtubePlay(c.query)
+            is Command.WhatsAppChat -> whatsappChat(c.who)
+            is Command.Tap -> hands("Tapping ${c.target}.") {
+                val r = Hands.call(ctx, "tap", c.target)
+                if (r == null || r.startsWith("not found")) "I couldn't find ${c.target} on the screen." else null
+            }
+            is Command.TypeText -> hands("Typing.") {
+                val r = Hands.call(ctx, "type", c.text)
+                if (r == null || r.startsWith("not found")) "I couldn't find a text box to type in." else null
+            }
+            is Command.Scroll -> hands("") { Hands.call(ctx, "scroll", if (c.down) "down" else "up"); null }
+            is Command.Global -> hands("") { Hands.call(ctx, "global", c.action); null }
+            Command.ReadScreen -> hands("Reading the screen.") {
+                Hands.call(ctx, "read")?.takeIf { it.isNotBlank() }?.take(600) ?: "I couldn't read anything on the screen."
+            }
             is Command.Note -> {
                 val stamp = SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date())
                 prefs.notes = (prefs.notes + "\n$stamp — ${c.text}").trim()
@@ -107,7 +132,8 @@ class Actions(private val ctx: Context) {
 
     // ------------------------------------------------------------------ contacts
 
-    data class Contact(val name: String, val number: String)
+    /** [sure] = the name matched clearly (exact / first name / starts with), not a fuzzy guess. */
+    data class Contact(val name: String, val number: String, val sure: Boolean = true)
 
     private fun has(perm: String) =
         ContextCompat.checkSelfPermission(ctx, perm) == PackageManager.PERMISSION_GRANTED
@@ -135,9 +161,9 @@ class Actions(private val ctx: Context) {
         return found.firstOrNull { it.name.equals(wanted, true) }
             ?: found.firstOrNull { it.name.lowercase().split(" ").firstOrNull() == wanted }
             ?: found.firstOrNull { it.name.lowercase().startsWith(wanted) }
-            ?: found.firstOrNull { it.name.lowercase().contains(wanted) }
+            ?: found.firstOrNull { it.name.lowercase().contains(wanted) }?.copy(sure = false)
             ?: found.minByOrNull { Fuzzy.distance(it.name.lowercase(), wanted) }
-                ?.takeIf { Fuzzy.distance(it.name.lowercase(), wanted) <= 2 }
+                ?.takeIf { Fuzzy.distance(it.name.lowercase(), wanted) <= 2 }?.copy(sure = false)
     }
 
     private fun noContact(who: String) =
@@ -159,11 +185,38 @@ class Actions(private val ctx: Context) {
         return Outcome("Here's your message to ${c.name}. Tap send.", i)
     }
 
+    /** WhatsApp needs the full international number (wa.me/919876543210). */
+    private fun intlNumber(raw: String): String {
+        val tm = ctx.getSystemService(android.telephony.TelephonyManager::class.java)
+        val iso = (tm?.simCountryIso?.takeIf { it.isNotBlank() } ?: tm?.networkCountryIso?.takeIf { it.isNotBlank() }
+            ?: Locale.getDefault().country).uppercase()
+        val e164 = android.telephony.PhoneNumberUtils.formatNumberToE164(raw, iso)
+        return (e164 ?: raw).filter { it.isDigit() }
+    }
+
+    private fun whatsappIntent(number: String, body: String?): Intent {
+        val url = "https://wa.me/" + intlNumber(number) + (body?.let { "?text=" + Uri.encode(it) } ?: "")
+        val app = Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage("com.whatsapp")
+        return if (app.resolveActivity(ctx.packageManager) != null) app else Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    }
+
     private fun whatsapp(who: String, body: String): Outcome {
         val c = findContact(who) ?: return noContact(who)
-        val num = c.number.filter { it.isDigit() }
-        val i = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$num?text=" + Uri.encode(body)))
+        val i = whatsappIntent(c.number, body)
+        // With Nova Hands and a clear contact match, press Send for you. Otherwise leave it for you to check.
+        if (Hands.ready(ctx) && c.sure) {
+            return Outcome("Sending “$body” to ${c.name} on WhatsApp.", i, after = {
+                kotlinx.coroutines.delay(1200)
+                val r = Hands.call(ctx, "send")
+                if (r == "ok") "Sent." else "I opened the chat. Tap send to finish."
+            })
+        }
         return Outcome("Opening WhatsApp for ${c.name}. Tap send.", i)
+    }
+
+    private fun whatsappChat(who: String): Outcome {
+        val c = findContact(who) ?: return noContact(who)
+        return Outcome("Opening your chat with ${c.name}.", whatsappIntent(c.number, null))
     }
 
     // ------------------------------------------------------------------ time
@@ -210,8 +263,33 @@ class Actions(private val ctx: Context) {
         "amazon" to "https://amazon.com", "wikipedia" to "https://wikipedia.org", "reddit" to "https://reddit.com",
     )
 
+    private val nicknames = mapOf(
+        "yt" to "youtube", "you tube" to "youtube", "insta" to "instagram", "ig" to "instagram",
+        "wa" to "whatsapp", "whats app" to "whatsapp", "whatsup" to "whatsapp", "whatsapp business" to "whatsapp business",
+        "fb" to "facebook", "gpay" to "google pay", "g pay" to "google pay", "tg" to "telegram", "snap" to "snapchat",
+        "twitter" to "x", "play store" to "play store", "playstore" to "play store", "gmail" to "gmail",
+        "maps" to "maps", "google maps" to "maps", "phone pe" to "phonepe", "yt music" to "youtube music",
+        "chat gpt" to "chatgpt", "files" to "files", "file manager" to "files", "photos" to "photos", "gallery" to "gallery",
+    )
+    private val packages = mapOf(
+        "youtube" to "com.google.android.youtube", "whatsapp" to "com.whatsapp", "instagram" to "com.instagram.android",
+        "facebook" to "com.facebook.katana", "google pay" to "com.google.android.apps.nbu.paisa.user",
+        "telegram" to "org.telegram.messenger", "snapchat" to "com.snapchat.android", "x" to "com.twitter.android",
+        "play store" to "com.android.vending", "gmail" to "com.google.android.gm", "maps" to "com.google.android.apps.maps",
+        "phonepe" to "com.phonepe.app", "paytm" to "net.one97.paytm", "spotify" to "com.spotify.music",
+        "chrome" to "com.android.chrome", "youtube music" to "com.google.android.apps.youtube.music",
+        "chatgpt" to "com.openai.chatgpt", "netflix" to "com.netflix.mediaclient", "amazon" to "in.amazon.mShop.android.shopping",
+        "photos" to "com.google.android.apps.photos", "calculator" to "com.google.android.calculator",
+        "clock" to "com.google.android.deskclock", "calendar" to "com.google.android.calendar",
+    )
+
     private fun open(raw: String): Outcome {
-        val name = raw.lowercase().removePrefix("the ").removeSuffix(" app").trim()
+        var name = raw.lowercase().removePrefix("up ").removePrefix("the ").removePrefix("my ")
+            .removeSuffix(" app").removeSuffix(" application").trim()
+        name = nicknames[name] ?: name
+        packages[name]?.let { pkg ->
+            ctx.packageManager.getLaunchIntentForPackage(pkg)?.let { return Outcome("Opening ${raw.trim()}.", it) }
+        }
         when (name) {
             "camera" -> return run(Command.Camera)
             "settings" -> return Outcome("Opening settings.", Intent(Settings.ACTION_SETTINGS))
@@ -263,6 +341,19 @@ class Actions(private val ctx: Context) {
         val i = if (app.resolveActivity(ctx.packageManager) != null) app else Intent(Intent.ACTION_VIEW, Uri.parse(url))
         return Outcome("Here's the $name channel on YouTube.", i)
     }
+
+    private fun youtubePlay(q: String): Outcome {
+        val base = youtube(q)
+        if (!Hands.ready(ctx)) return base
+        return base.copy(say = "Playing $q.", after = {
+            val r = Hands.call(ctx, "play_first")
+            if (r == "ok") null else "Here are the results for $q."
+        })
+    }
+
+    /** On-screen control needs Nova Hands. */
+    private fun hands(say: String, block: suspend () -> String?): Outcome =
+        if (!Hands.ready(ctx)) Outcome(Hands.NOT_READY) else Outcome(say, after = block)
 
     private fun settingsPanel(which: String): Outcome {
         val i = when {

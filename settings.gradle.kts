@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "Nova"
-include(":app")
+include(":app", ":hands")

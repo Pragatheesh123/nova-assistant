@@ -12,9 +12,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -24,19 +24,27 @@ jobs:
       - name: Build
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew :app:assembleRelease :hands:assembleRelease --stacktrace
           cp app/build/outputs/apk/release/app-release.apk Nova.apk
+          cp hands/build/outputs/apk/release/hands-release.apk Nova-Hands.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: Nova-apk
-          path: Nova.apk
+          path: |
+            Nova.apk
+            Nova-Hands.apk
 
       - name: Publish download
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: Nova (build ${{ github.run_number }})
-          body: Open this page on your Android phone and tap **Nova.apk** to install.
-          files: Nova.apk
+          body: |
+            Open this page on your Android phone.
+            1. Tap **Nova.apk** to install Nova.
+            2. Optional, for full Jarvis mode: tap **Nova-Hands.apk** (lets Nova tap, type and scroll in other apps).
+          files: |
+            Nova.apk
+            Nova-Hands.apk
           make_latest: true

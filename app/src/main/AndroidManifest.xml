@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Only apps signed with Nova's key (Nova Hands) may use this. -->
+    <permission
+        android:name="com.nova.assistant.permission.CONTROL"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="com.nova.assistant.permission.CONTROL" />
+
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
@@ -30,6 +36,9 @@
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
+        <package android:name="com.nova.hands" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.google.android.youtube" />
     </queries>
 
     <application

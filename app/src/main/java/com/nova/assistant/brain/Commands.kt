@@ -24,6 +24,18 @@ object Commands {
         Regex("^(?:send )?(?:a )?(?:whatsapp|whats app)(?: message)? (?:to )?(.+?) (?:saying|that|says) (.+)$").find(t)?.let {
             return Command.WhatsApp(it.groupValues[1], keep(it.groupValues[2]))
         }
+        Regex("^(?:open |show |go to )?(?:my )?(?:whatsapp|whats app) chat (?:with|of|for) (.+)$").find(t)?.let {
+            return Command.WhatsAppChat(it.groupValues[1])
+        }
+        Regex("^(?:open|show|go to) (?:my )?(.+?)(?:(?:'s|s')? (?:whatsapp|whats app) chat|(?:'s|s') (?:whatsapp|whats app))$").find(t)?.let {
+            return Command.WhatsAppChat(it.groupValues[1])
+        }
+        Regex("^(?:open|show|go to) (?:my )?chat (?:with|of) (.+?)(?: on whatsapp)?$").find(t)?.let {
+            return Command.WhatsAppChat(it.groupValues[1])
+        }
+        Regex("^(?:whatsapp|message) (.+?)(?: on whatsapp)?$").find(t)?.takeIf { "saying" !in t && " that " !in t }?.let {
+            if (it.groupValues[1] !in setOf("open", "chat")) return Command.WhatsAppChat(it.groupValues[1])
+        }
         Regex("^(?:text|message|sms|send (?:a )?(?:text|message|sms)(?: to)?) (.+?) (?:saying|that|says) (.+)$").find(t)?.let {
             return Command.Text(it.groupValues[1], keep(it.groupValues[2]))
         }
@@ -48,6 +60,23 @@ object Commands {
             remindAt(m.groupValues[2])?.let { return Command.Remind(it, keep(m.groupValues[1]), m.groupValues[2]) }
         }
 
+        // --- on-screen control (Nova Hands)
+        when {
+            Regex("^scroll( down)?$|^scroll down( a bit)?$|^page down$").matches(t) -> return Command.Scroll(true)
+            Regex("^scroll up( a bit)?$|^page up$").matches(t) -> return Command.Scroll(false)
+            Regex("^(go )?back$|^press back$").matches(t) -> return Command.Global("back")
+            Regex("^(go )?(to )?(the )?home( screen)?$").matches(t) -> return Command.Global("home")
+            Regex("^(show |open )?(recent apps|recents)$").matches(t) -> return Command.Global("recents")
+            Regex("^(show|open|pull down)( my| the)? notifications$").matches(t) -> return Command.Global("notifications")
+            Regex("^(open|show)( the)? quick settings$").matches(t) -> return Command.Global("quick_settings")
+            Regex("^(read (the |my )?screen|read (this|it) (out|to me)|what('s| is) on (the |my )?screen)$").matches(t) -> return Command.ReadScreen
+        }
+
+        Regex("^(?:tap|click|press|hit|select|touch)(?: on)?(?: the)? (.+?)(?: button| icon| tab| option)?$").find(t)?.let {
+            return Command.Tap(keep(it.groupValues[1]))
+        }
+        Regex("^(?:type|enter|write)(?: in)? (.+)$").find(t)?.let { return Command.TypeText(keep(it.groupValues[1])) }
+
         // --- torch
         if (Regex("\\b(torch|flashlight|flash ?light|flash)\\b").containsMatchIn(t)) {
             if (Regex("\\b(off|disable|stop)\\b").containsMatchIn(t)) return Command.Torch(false)
@@ -62,7 +91,7 @@ object Commands {
                 return Command.Media(KeyEvent.KEYCODE_MEDIA_PLAY, "Playing.")
             Regex("^(next|skip)( this)?( song| track)?$").matches(t) || t == "play the next song" ->
                 return Command.Media(KeyEvent.KEYCODE_MEDIA_NEXT, "Skipping.")
-            Regex("^(previous|go back|last)( song| track)?$").matches(t) ->
+            Regex("^(previous|last)( song| track)?$|^go back a (song|track)$").matches(t) ->
                 return Command.Media(KeyEvent.KEYCODE_MEDIA_PREVIOUS, "Going back.")
         }
         Regex("volume (?:to )?(\\d{1,3})(?: percent| %)?").find(t)?.let {
@@ -86,10 +115,11 @@ object Commands {
         Regex("^(?:go to|open|show(?: me)?|find) (.+?)(?:'s|s')? (?:youtube |yt )?channel(?: on (?:youtube|yt))?$").find(t)?.let {
             return Command.YouTubeChannel(it.groupValues[1])
         }
-        Regex("^(?:open |go to |launch )?(?:youtube|yt) (?:and |then )?(?:search|look up|find|play)(?: for)? (.+)$").find(t)?.let {
+        Regex("^(?:open |go to |launch )?(?:youtube|yt) (?:and |then )?(?:search|look up|find)(?: for)? (.+)$").find(t)?.let {
             return Command.YouTube(it.groupValues[1])
         }
-        Regex("^play (.+?) on youtube$").find(t)?.let { return Command.YouTube(it.groupValues[1]) }
+        Regex("^play (.+?) on (?:youtube|yt)$").find(t)?.let { return Command.YouTubePlay(it.groupValues[1]) }
+        Regex("^(?:open |go to )?(?:youtube|yt) (?:and |then )?play (.+)$").find(t)?.let { return Command.YouTubePlay(it.groupValues[1]) }
         Regex("^(?:youtube|search youtube for) (.+)$").find(t)?.let { return Command.YouTube(it.groupValues[1]) }
         Regex("^(?:search|google|look up|search for|search the web for) (.+)$").find(t)?.let {
             return Command.Search(it.groupValues[1].removePrefix("for "))
@@ -125,6 +155,7 @@ object Commands {
         .replace(Regex("^(hey |ok |okay |hi )?nova[,!.]?\\s*"), "")
         .replace(Regex("^(can you|could you|would you|will you|please|can u|i want you to|i need you to)\\s+"), "")
         .replace(Regex("^(please)\\s+"), "")
+        .replace(Regex("^open up\\s+"), "open ")
         .replace(Regex("[?!.,]+$"), "")
         .replace(Regex("\\s+please$"), "")
         .replace("’", "'")

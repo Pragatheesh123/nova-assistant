@@ -44,6 +44,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,8 +53,11 @@ import com.nova.assistant.assist.NovaInteractionService
 import com.nova.assistant.brain.Llm
 import com.nova.assistant.ui.Nova
 import com.nova.assistant.ui.NovaTheme
-import com.nova.assistant.ui.Orb
+import com.nova.assistant.actions.Hands
+import com.nova.assistant.assist.OverlayPanel
+import com.nova.assistant.ui.HudOrb
 import com.nova.assistant.ui.OrbState
+import com.nova.assistant.ui.Pill
 import com.nova.assistant.voice.Speaker
 import com.nova.assistant.wake.WakeService
 import kotlinx.coroutines.Dispatchers
@@ -92,6 +97,12 @@ class MainActivity : ComponentActivity() {
         add(Manifest.permission.CALL_PHONE)
         if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
     }.toTypedArray()
+
+    /** Call Nova: the floating panel if allowed, else the full-screen pop-up. */
+    private fun summon() {
+        if (OverlayPanel.canShow(this)) OverlayPanel.show(this)
+        else startActivity(Intent(this, AssistActivity::class.java))
+    }
 
     private fun openAssistantSettings() {
         val tries = listOf(
@@ -182,25 +193,38 @@ class MainActivity : ComponentActivity() {
         val voskOk = WakeService.modelReady(this)
         val batteryOk = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
 
+        val handsIn = Hands.installed(this)
+        val handsOn = Hands.enabled(this)
+        val ready = listOf(allPerms, overlayOk, isDefault, modelOk, wake && voskOk, handsIn && handsOn).count { it }
+
         Column(
             Modifier
                 .fillMaxSize()
-                .background(Nova.Ink)
+                .background(Brush.verticalGradient(listOf(Color(0xFF0C0C0C), Nova.Ink, Nova.Ink)))
                 .safeDrawingPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp),
         ) {
-            Spacer(Modifier.height(18.dp))
-            Text("NOVA", style = Nova.wordmark)
-            Box(Modifier.fillMaxWidth().height(250.dp), contentAlignment = Alignment.Center) {
-                Orb(OrbState.Idle, 0f, Modifier.size(240.dp).clickable { startActivity(Intent(this@MainActivity, AssistActivity::class.java)) })
+            Spacer(Modifier.height(14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("N O V A", style = Nova.mono.copy(color = Nova.Pearl, fontSize = 13.sp, letterSpacing = 3.sp))
+                Spacer(Modifier.weight(1f))
+                Text("ON-DEVICE · PRIVATE", style = Nova.mono.copy(fontSize = 9.5.sp))
+            }
+            Box(Modifier.fillMaxWidth().height(310.dp), contentAlignment = Alignment.Center) {
+                HudOrb(OrbState.Idle, 0f, Modifier.size(290.dp).clickable { summon() })
             }
             Text(
-                "Your private assistant. Everything runs on this phone.",
-                style = Nova.body, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                "SYSTEMS READY  $ready / 6", style = Nova.mono.copy(color = Nova.Pearl2),
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Tap the core to talk. Everything runs on this phone.",
+                style = Nova.body.copy(fontSize = 14.sp), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(26.dp))
-            Text("SET UP", style = Nova.kicker)
+            Text("SET UP", style = Nova.mono)
             Spacer(Modifier.height(10.dp))
 
             Step(
@@ -211,20 +235,30 @@ class MainActivity : ComponentActivity() {
             }
 
             Step(
-                n = 2, done = isDefault, title = "Make Nova your assistant",
+                n = 2, done = overlayOk, title = "Floating panel",
+                text = if (overlayOk) "Done. Nova appears on top of any app when you call it."
+                else "Allow “Display over other apps” so Nova's panel pops up over whatever you're doing.",
+            ) {
+                if (!overlayOk) Pill("Allow", solid = true, Modifier.fillMaxWidth()) {
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                }
+            }
+
+            Step(
+                n = 3, done = isDefault, title = "Power-button assistant",
                 text = if (isDefault) "Done. Hold the power button (or swipe up from a bottom corner) to call Nova."
                 else "Choose Nova under “Digital assistant app”. Then holding the power button calls Nova instead of Google.\n" +
-                    "Samsung: also set Settings › Advanced features › Side button › Press and hold › Digital assistant.",
+                    "Samsung: also Settings › Advanced features › Side button › Press and hold › Digital assistant.",
             ) {
                 if (!isDefault) Pill("Open settings", solid = true, Modifier.fillMaxWidth()) { openAssistantSettings() }
             }
 
             Step(
-                n = 3, done = modelOk, title = "AI brain",
+                n = 4, done = modelOk, title = "AI brain",
                 text = when {
                     copying -> modelMsg
                     modelMsg.isNotEmpty() -> modelMsg
-                    modelOk -> "Installed (${modelSize / 1_000_000} MB). Nova can chat and understand anything."
+                    modelOk -> "Installed (${modelSize / 1_000_000} MB). Nova can chat and understand loose wording."
                     else -> "A ~1.6 GB AI model that runs on your phone. Best on Wi-Fi. Commands work without it."
                 },
             ) {
@@ -241,13 +275,12 @@ class MainActivity : ComponentActivity() {
             }
 
             Step(
-                n = 4, done = wake && voskOk && overlayOk, title = "“Hey Nova”",
+                n = 5, done = wake && voskOk, title = "“Hey Nova”",
                 text = when {
                     voskMsg.isNotEmpty() -> voskMsg
-                    !wake -> "Optional. Wake Nova hands-free by voice. Uses a little battery."
-                    !voskOk -> "Needs a small 40 MB wake-word download."
-                    !overlayOk -> "Allow “Display over other apps” so Nova can pop up when you call."
-                    !batteryOk -> "Listening. Tip: allow Nova to run in the background so Android doesn't stop it."
+                    !wake -> "Wake Nova hands-free, even with the app closed. Also gives Nova offline ears for the floating panel."
+                    !voskOk -> "Needs a small 40 MB download."
+                    !batteryOk -> "Listening. Allow background running so Android doesn't stop it."
                     else -> "Listening for “Hey Nova”."
                 },
             ) {
@@ -271,13 +304,7 @@ class MainActivity : ComponentActivity() {
                         ),
                     )
                 }
-                if (wake && !overlayOk) {
-                    Spacer(Modifier.height(10.dp))
-                    Pill("Allow pop-up", solid = true, Modifier.fillMaxWidth()) {
-                        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-                    }
-                }
-                if (wake && overlayOk && !batteryOk) {
+                if (wake && !batteryOk) {
                     Spacer(Modifier.height(10.dp))
                     Pill("Run in background", solid = false, Modifier.fillMaxWidth()) {
                         runCatching {
@@ -287,7 +314,24 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            Step(n = 5, done = true, title = "Voice", text = if (uk) "British English" else "American English") {
+            Step(
+                n = 6, done = handsIn && handsOn, title = "Nova Hands · Jarvis mode",
+                text = when {
+                    !handsIn -> "Optional companion app that lets Nova tap, type, scroll and press Send inside other apps. " +
+                        "It's separate so Nova itself never gets blocked. Download Nova-Hands.apk from the same page as Nova."
+                    !handsOn -> "Turn it on: Accessibility › Installed apps › Nova Hands › On.\n" +
+                        "Greyed out? App info › Nova Hands › ⋮ (top right) › Allow restricted settings, then try again."
+                    else -> "Active. Try “tap subscribe”, “scroll down” or “read the screen”."
+                },
+            ) {
+                if (!handsIn) Pill("Get Nova Hands", solid = true, Modifier.fillMaxWidth()) {
+                    runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES))) }
+                } else if (!handsOn) Pill("Open Accessibility", solid = true, Modifier.fillMaxWidth()) {
+                    runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                }
+            }
+
+            Step(n = 7, done = true, title = "Voice", text = if (uk) "British English" else "American English") {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Pill(if (uk) "Switch to US" else "Switch to UK", solid = false, Modifier.weight(1f)) {
                         uk = !uk; prefs.britishVoice = uk
@@ -295,27 +339,29 @@ class MainActivity : ComponentActivity() {
                     }
                     Pill("Test voice", solid = true, Modifier.weight(1f)) {
                         val s = speaker ?: Speaker(this@MainActivity) {}.also { speaker = it }
-                        s.say("Good to meet you. I'm Nova, and I live right here on your phone.")
+                        s.say("Good to meet you. I'm Nova. All systems are online.")
                     }
                 }
             }
 
             Spacer(Modifier.height(8.dp))
-            Pill("Talk to Nova now", solid = true, Modifier.fillMaxWidth()) {
-                startActivity(Intent(this@MainActivity, AssistActivity::class.java))
-            }
-            Spacer(Modifier.height(18.dp))
-            Text("TRY SAYING", style = Nova.kicker)
+            Pill("Talk to Nova", solid = true, Modifier.fillMaxWidth()) { summon() }
+            Spacer(Modifier.height(22.dp))
+            Text("TRY SAYING", style = Nova.mono)
             Spacer(Modifier.height(8.dp))
             Text(
-                "“Call mum” · “Text Sam saying I'm on my way” · “Wake me up at 6:30” · “Timer for 10 minutes” · " +
-                    "“Remind me in an hour to take the washing out” · “Open WhatsApp” · “Torch on” · “Next song” · " +
-                    "“Volume 40” · “Navigate to the airport” · “Play lofi on YouTube” · “Take a note…” · " +
-                    "“What's my battery?” · and anything else once the AI brain is installed.",
+                "“Open YouTube and go to MrBeast's channel” · “Play lofi on YouTube” · “Open my WhatsApp chat with Mom” · " +
+                    "“WhatsApp Sam saying I'm on my way” · “Call mum” · “Wake me up at 6:30” · “Timer for 10 minutes” · " +
+                    "“Remind me in an hour to take the washing out” · “Open insta” · “Torch on” · “Next song” · " +
+                    "“Who won the match last night?” · With Nova Hands: “Tap subscribe” · “Scroll down” · “Go back” · “Read the screen”.",
                 style = Nova.body.copy(fontSize = 14.sp, lineHeight = 22.sp),
             )
             Spacer(Modifier.height(40.dp))
         }
+    }
+
+    companion object {
+        const val RELEASES = "https://github.com/Pragatheesh123/nova-assistant/releases/latest"
     }
 
     private fun pct(b: Long, t: Long) = if (t > 0) "${b * 100 / t}%  (${b / 1_000_000} / ${t / 1_000_000} MB)" else "${b / 1_000_000} MB"
@@ -327,8 +373,8 @@ private fun Step(n: Int, done: Boolean, title: String, text: String, content: @C
         Modifier
             .fillMaxWidth()
             .padding(bottom = 12.dp)
-            .background(Nova.Surface, RoundedCornerShape(24.dp))
-            .border(1.dp, Nova.Line, RoundedCornerShape(24.dp))
+            .background(Brush.verticalGradient(listOf(Color(0x10FFFFFF), Color(0x05FFFFFF))), RoundedCornerShape(24.dp))
+            .border(1.dp, if (done) Nova.Line else Color(0x26FFFFFF), RoundedCornerShape(24.dp))
             .padding(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

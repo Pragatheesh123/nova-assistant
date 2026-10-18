@@ -46,6 +46,12 @@ class NovaSessionService : VoiceInteractionSessionService() {
 class NovaSession(context: Context) : VoiceInteractionSession(context) {
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
+        // Prefer the floating panel over whatever app you're in.
+        if (OverlayPanel.canShow(context)) {
+            OverlayPanel.show(context)
+            hide()
+            return
+        }
         val intent = Intent(context, AssistActivity::class.java)
         if (Build.VERSION.SDK_INT >= 29) {
             try {

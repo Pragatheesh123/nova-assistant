@@ -18,6 +18,8 @@ class Listener(
     private val onLevel: (Float) -> Unit,
     private val onFinal: (String) -> Unit,
     private val onError: (String) -> Unit,
+    /** Called instead of onError when Android won't let the recogniser use the mic (e.g. from the background). */
+    private val onBlocked: (() -> Unit)? = null,
 ) {
     private var recognizer: SpeechRecognizer? = null
     private var triedFallback = false
@@ -26,6 +28,10 @@ class Listener(
         stop()
         val onDevice = !forceStandard && Build.VERSION.SDK_INT >= 31 &&
             SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+        if (!onDevice && !SpeechRecognizer.isRecognitionAvailable(context)) {
+            onBlocked?.invoke() ?: onError("This phone has no speech recogniser. Tap the keyboard to type.")
+            return
+        }
         recognizer = if (onDevice) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
         else SpeechRecognizer.createSpeechRecognizer(context)
 
@@ -62,7 +68,9 @@ class Listener(
                 }
                 when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> onFinal("")
-                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> onError("I need microphone permission. Open the Nova app to allow it.")
+                    SpeechRecognizer.ERROR_AUDIO, SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+                        onBlocked?.invoke() ?: onError("I need microphone permission. Open the Nova app to allow it.")
                     else -> onError("I couldn't hear that.")
                 }
             }

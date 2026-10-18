@@ -19,6 +19,7 @@ import com.nova.assistant.NovaApp
 import com.nova.assistant.Prefs
 import com.nova.assistant.R
 import com.nova.assistant.assist.NovaInteractionService
+import com.nova.assistant.assist.OverlayPanel
 import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
@@ -145,6 +146,10 @@ class WakeService : Service(), RecognitionListener {
 
         /** Show the Nova pop-up from the background. */
         fun openNova(ctx: Context) {
+            if (OverlayPanel.canShow(ctx)) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post { OverlayPanel.show(ctx) }
+                return
+            }
             val svc = NovaInteractionService.instance
             if (svc != null) {
                 try { svc.showSession(Bundle(), 0); return } catch (e: Exception) { }

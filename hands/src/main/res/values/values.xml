@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ink">#FF050505</color>
+    <string name="hands_description">Lets your Nova assistant tap, type, scroll and read the screen when you ask it to by voice. Nova Hands only acts on your spoken commands and never sends what it sees anywhere.</string>
+    <style name="Theme.Hands" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ink</item>
+        <item name="android:statusBarColor">@color/ink</item>
+        <item name="android:navigationBarColor">@color/ink</item>
+    </style>
+</resources>
