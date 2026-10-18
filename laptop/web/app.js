@@ -114,10 +114,11 @@
       case "welcome":
         me = m.device; server = m;
         $("status").classList.add("on");
-        $("status").querySelector("b").textContent = m.llm ? "Local · " + m.model : "Local · basic mode";
+        $("status").querySelector("b").textContent = m.cloud ? m.model : m.llm ? "Local · " + m.model : "Basic mode";
+        $("claudeRow").hidden = !me.local;
         if (!settings.name) $("optName").placeholder = me.name;
         $("engineInfo").textContent =
-          `Brain: ${m.llm ? m.model + " via Ollama" : "offline rules (start Ollama for full AI)"}. ` +
+          `Brain: ${m.cloud ? m.model + " (cloud)" : m.llm ? m.model + " via Ollama" : "offline rules (add a Claude key or start Ollama)"}. ` +
           `Hearing: ${m.stt ? "Whisper on your laptop" : "browser speech recognition"}. ` +
           `Voice: ${m.tts ? "Piper on your laptop" : "this device's built-in voice"}.`;
         setState("idle");
@@ -131,6 +132,10 @@
         speak(m.text);
         break;
       case "notice": toast(m.text); break;
+      case "brain":
+        $("status").querySelector("b").textContent = m.cloud ? m.model : "Basic mode";
+        toast(m.cloud ? "Claude connected" : "Key removed");
+        break;
       case "summon": unlockAudio(); chime(); if (state !== "listening") talk(); break;
       case "action": runAction(m.action, m.args || {}); break;
       case "confirm": askConfirm(m); break;
@@ -141,11 +146,13 @@
     }
   }
 
+  let lastCues = ""; // how the last thing was said (from the laptop's voice analysis)
   function ask(text) {
     text = text.trim();
     if (!text) return;
     addMsg("you", text);
-    send({ type: "say", text });
+    send({ type: "say", text, cues: lastCues });
+    lastCues = "";
   }
   $("askForm").onsubmit = (e) => { e.preventDefault(); unlockAudio(); ask($("askInput").value); $("askInput").value = ""; };
 
@@ -370,7 +377,9 @@
   async function transcribe(blob) {
     const r = await fetch("/api/stt", { method: "POST", body: blob, headers: { "x-nova-token": store.get("token", "") } });
     if (!r.ok) throw new Error("stt failed");
-    return (await r.json()).text || "";
+    const j = await r.json();
+    lastCues = j.cues || "";
+    return j.text || "";
   }
 
   // Record one utterance; stops on silence. Resolves to text.
@@ -636,6 +645,10 @@
   $("optSpeak").checked = settings.speak;
   $("optName").value = settings.name;
   $("settingsBtn").onclick = () => openSheet("settingsSheet");
+  $("saveClaude").onclick = () => {
+    send({ type: "set_key", key: $("optClaude").value.trim() });
+    $("optClaude").value = "";
+  };
   $("settingsDone").onclick = closeSheets;
   $("optLight").onchange = (e) => {
     settings.light = e.target.checked; store.set("light", settings.light);

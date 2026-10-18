@@ -1,4 +1,3 @@
-data/*
-!data/.keep
+data/
 .venv/
 __pycache__/

@@ -13,30 +13,31 @@ The AI model, speech recognition and your notes all stay on your own machine. No
             └──────────────────────────────────────┘
 ```
 
-## PC setup (Windows, one time, ~15 minutes)
+## Setup (one time, about 10 minutes)
 
-1. **Python:** install from https://www.python.org/downloads/ and **tick "Add python.exe to PATH"**.
-2. **Ollama (the AI brain):** install from https://ollama.com, then open a terminal and run:
+1. **Install Python 3.10+** from python.org.
+2. **Install Ollama** from https://ollama.com, then pull a model that can use tools:
    ```
-   ollama pull qwen3:8b
+   ollama pull qwen3:8b          # default: thinks before hard answers, great with tools (~6 GB RAM)
+   ollama pull qwen3:4b          # faster on weaker laptops; then set NOVA_MODEL=qwen3:4b
    ```
-   Weaker laptop (8 GB RAM or less)? Use `ollama pull qwen3:4b` and set `NOVA_MODEL=qwen3:4b`.
-3. **Get Nova:** on GitHub open your `nova-assistant` repo → **Code → Download ZIP**, extract it, and open
-   the `laptop` folder. (Updating? Copy the new files over the old ones, but keep your `.venv` folder.)
-4. **Start it:** double-click **`start.bat`**. The first run installs everything (a few minutes).
-   Nova then opens in **its own window**. Allow the microphone when asked.
-5. **Chrome/Edge extension (tab control):** open `chrome://extensions` (or `edge://extensions`) → turn on
-   **Developer mode** → **Load unpacked** → choose the `laptop\extension` folder. Click the Nova icon:
-   it should say **Connected to Nova**.
-6. **Optional:** double-click **`autostart.bat`** so Nova starts quietly whenever you sign in.
+3. **Extract the zip first.** Right-click → *Extract All…*. Don't run it from inside the zip.
+4. **Start Nova:**
+   - Windows: double-click `start.bat`. The window stays open and shows a clear message if something's missing.
+   - Mac/Linux: `./start.sh`
 
-**Using it:** press **Ctrl + Alt + N** anywhere to call Nova, or click the orb / press Space in its window.
-**Phone:** the Nova Android app works on its own. You don't need the laptop for it.
+   The first run installs everything into a `.venv` folder. That takes a few minutes; later starts are instant.
+
+5. **Laptop:** open `https://localhost:8765`.
+6. **Phone:** connect to the **same Wi-Fi**, then scan the QR code that Nova prints in the terminal.
+   - Your browser will warn you about the certificate. That's expected, because Nova made its own
+     certificate so your phone's microphone works. Tap **Advanced → Proceed**.
+   - Use **Add to Home Screen** and Nova opens like a normal app.
 
 ## Browser control (all your tabs)
 
 1. Open Chrome (or Edge/Brave) → `chrome://extensions` → turn on **Developer mode** (top right).
-2. Click **Load unpacked** and pick the `laptop/extension` folder.
+2. Click **Load unpacked** and pick the `nova/extension` folder.
 3. Pin the Nova icon. Click it: it says **Connected to Nova** while Nova is running.
 
 Now you can say things like:

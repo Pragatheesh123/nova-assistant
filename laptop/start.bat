@@ -38,7 +38,8 @@ echo.
 echo   Starting Nova. Keep this window open (you can minimise it).
 echo   Nova's own window opens in a few seconds. Ctrl+Alt+N calls Nova from anywhere.
 echo.
-".venv\Scripts\python.exe" -m pip install -q pynput >nul 2>&1
+echo   Checking for updates to Nova's components...
+".venv\Scripts\python.exe" -m pip install -q -r requirements.txt >nul 2>&1
 ".venv\Scripts\python.exe" -m server.main --window %*
 echo.
 echo   Nova stopped. If you see an error above, send a screenshot of it.

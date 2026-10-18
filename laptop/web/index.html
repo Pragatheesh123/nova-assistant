@@ -116,6 +116,13 @@
       <span><b>Voice</b></span>
       <select id="optVoice"></select>
     </label>
+    <div class="row col" id="claudeRow" hidden>
+      <span><b>Claude API key</b><small>Nova's cloud brain. Get one at console.anthropic.com → API keys. Stored only on this laptop.</small></span>
+      <div class="keyrow">
+        <input id="optClaude" class="text" type="password" placeholder="sk-ant-…" autocomplete="off">
+        <button class="btn solid" id="saveClaude" type="button">Save</button>
+      </div>
+    </div>
     <label class="row col">
       <span><b>This device's name</b><small>Say “…on my <em>name</em>” to send things here</small></span>
       <input id="optName" class="text" placeholder="phone">

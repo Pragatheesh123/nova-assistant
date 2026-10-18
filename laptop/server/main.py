@@ -114,7 +114,7 @@ def _egress_target(tool, value):
     return host or "the internet"
 
 
-async def handle(origin, text):
+async def handle(origin, text, cues=""):
     ctx = Ctx(origin)
 
     async def execute(name, args):
@@ -158,13 +158,21 @@ async def handle(origin, text):
         return CLIENT_DONE.get(name, "Done.")
 
     await safe_send(origin, {"type": "state", "state": "thinking"})
+    # Everything you say goes to Claude: check it for sensitive data first.
+    if brain.cloud() and not await ctx.guard("message to Claude", "Anthropic (Claude)", text):
+        await safe_send(origin, {"type": "reply", "text": "Okay, I didn't send that anywhere."})
+        return
     try:
         async with brain_lock:
-            reply = await brain.think(text, origin, router.names(), execute)
+            reply = await brain.think(text, origin, router.names(), execute, cues)
     except asyncio.CancelledError:
         await safe_send(origin, {"type": "reply", "text": "Stopped."})
         raise
     await safe_send(origin, {"type": "reply", "text": reply})
+
+
+def brain_name():
+    return "Claude Opus 5.5" if brain.cloud() else config.MODEL
 
 
 def same_origin(ws: WebSocket) -> bool:
@@ -190,7 +198,8 @@ async def ws_endpoint(ws: WebSocket):
     dev = router.add(ws, hello.get("name"), hello.get("kind", "desktop"), hello.get("caps", []), is_local(host))
     print(f"+ {dev.name} connected ({dev.kind}, {host})")
     await ws.send_json({
-        "type": "welcome", "device": dev.info(), "llm": await brain.check_llm(), "model": config.MODEL,
+        "type": "welcome", "device": dev.info(), "llm": bool(brain.cloud()) or await brain.check_llm(),
+        "model": brain_name(), "cloud": bool(brain.cloud()),
         "stt": speech.stt_available(), "tts": speech.tts_available(),
         "log": guard.LOG[-50:],
     })
@@ -202,7 +211,11 @@ async def ws_endpoint(ws: WebSocket):
                 print(f"[{dev.name}] {msg['text']}")
                 if dev.id in tasks and not tasks[dev.id].done():
                     tasks[dev.id].cancel()  # a new request replaces the old one
-                tasks[dev.id] = asyncio.create_task(handle(dev, msg["text"].strip()))
+                tasks[dev.id] = asyncio.create_task(handle(dev, msg["text"].strip(), str(msg.get("cues", ""))[:120]))
+            elif msg.get("type") == "set_key" and dev.local:  # only from this laptop
+                from .claude import save_key
+                save_key(str(msg.get("key", "")))
+                await ws.send_json({"type": "brain", "cloud": bool(brain.cloud()), "model": brain_name()})
             elif msg.get("type") == "abort":
                 for f in list(pending.values()):
                     if not f.done():
@@ -233,7 +246,8 @@ async def stt(request: Request):
         raise HTTPException(501, "faster-whisper not installed")
     audio = await request.body()
     try:
-        return {"text": await asyncio.to_thread(speech.transcribe, audio)}
+        text, cues = await asyncio.to_thread(speech.transcribe, audio)
+        return {"text": text, "cues": cues}
     except Exception as e:
         print(f"! speech recognition failed: {type(e).__name__}: {e}")
         raise HTTPException(500, "speech recognition failed")
@@ -390,6 +404,7 @@ def main():
 
     async def serve():
         start_hotkey(asyncio.get_running_loop())
+        asyncio.get_running_loop().run_in_executor(None, speech.ensure_voice)
         if args.window:
             asyncio.get_running_loop().call_later(2.5, open_window)
         # Wi-Fi port (HTTPS, for the phone) + laptop-only port (no certificate warning, extension)

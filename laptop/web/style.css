@@ -303,3 +303,6 @@ body::before {
 }
 @keyframes spin { to { --spin: 360deg; } }
 .mic { box-shadow: 0 0 0 1px var(--fg-3), 0 0 28px rgba(244, 241, 234, 0.18), 0 10px 30px rgba(0, 0, 0, 0.35); }
+
+.keyrow { display: flex; gap: 8px; }
+.keyrow .btn { flex: none; width: 92px; height: 46px; }

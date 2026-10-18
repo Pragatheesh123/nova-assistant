@@ -48,8 +48,21 @@ class Brain:
             self.llm_ok = False
         return self.llm_ok
 
-    async def think(self, text, origin, devices, execute):
+    def cloud(self):
+        """Claude brain if an API key is configured, else None (local Ollama brain)."""
+        from .claude import ClaudeBrain, load_key
+        key = load_key()
+        if not key:
+            return None
+        if getattr(self, "_claude_key", None) != key:
+            self._claude, self._claude_key = ClaudeBrain(key), key
+        return self._claude
+
+    async def think(self, text, origin, devices, execute, cues=""):
         """execute(tool_name, args) -> str result. Returns Nova's spoken reply."""
+        claude = self.cloud()
+        if claude:
+            return await claude.think(text, origin, devices, execute, cues)
         # Instant path: simple device commands never wait for the model.
         quick = await self._offline(text, execute, quick=True)
         if quick:
