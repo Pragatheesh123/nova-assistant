@@ -1,0 +1,100 @@
+package com.nova.assistant.brain
+
+import android.content.Context
+import com.nova.assistant.actions.Actions
+import com.nova.assistant.actions.Outcome
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * Decides what to do with what you said:
+ *  1. Everyday commands are understood instantly by [Commands] (no AI needed).
+ *  2. Anything else goes to the on-device model, which either answers or rewrites
+ *     your request as a command line ("COMMAND: call mom") that [Commands] can run.
+ */
+class Brain(private val ctx: Context) {
+    private val actions = Actions(ctx)
+
+    suspend fun handle(text: String): Outcome {
+        Commands.parse(text)?.let { cmd -> return withContext(Dispatchers.Main) { actions.run(cmd) } }
+
+        if (!Llm.installed(ctx)) {
+            return Outcome("I didn't catch a command there. Download my AI brain in the Nova app so I can understand anything.")
+        }
+
+        val raw = try {
+            Llm.generate(ctx, prompt(text))
+        } catch (e: Throwable) {
+            return Outcome("My AI brain couldn't start on this phone. ${e.message?.take(80) ?: ""}".trim())
+        }
+        val reply = clean(raw)
+
+        val cmdLine = Regex("(?im)^\\s*COMMAND:\\s*(.+)$").find(reply)?.groupValues?.get(1)?.trim()
+        if (cmdLine != null) {
+            val cmd = Commands.parse(cmdLine)
+            remember(text, "COMMAND: $cmdLine")
+            return if (cmd != null) withContext(Dispatchers.Main) { actions.run(cmd) }
+            else Outcome("I'm not able to do that yet.")
+        }
+        remember(text, reply)
+        return Outcome(reply.ifBlank { "Sorry, I'm not sure." })
+    }
+
+    // ------------------------------------------------------------------ prompt
+
+    private fun prompt(user: String): String {
+        val now = SimpleDateFormat("EEEE d MMMM yyyy, h:mm a", Locale.getDefault()).format(Date())
+        val system = """
+            You are Nova, a calm, witty voice assistant that lives on the user's Android phone, like Jarvis.
+            Your answers are spoken aloud: one or two short sentences, plain words, no lists, no markdown, no emoji.
+            It is $now.
+            If the user wants the phone to DO something, reply with exactly one line and nothing else:
+            COMMAND: <command>
+            where <command> is one of:
+            call <name> | text <name> saying <message> | whatsapp <name> saying <message> |
+            set an alarm for <time, e.g. 7:30 am> | set a timer for <n> minutes |
+            remind me in <n> minutes to <thing> | remind me at <time> to <thing> |
+            open <app name> | torch on | torch off | pause | play | next song | previous song |
+            volume up | volume down | volume <0-100> | mute | navigate to <place> | search <query> |
+            play <query> on youtube | take a note <text> | read my notes | take a photo |
+            what time is it | battery
+            Otherwise just answer the question yourself.
+        """.trimIndent()
+
+        val shots = listOf(
+            "could you get my mum on the phone" to "COMMAND: call mum",
+            "i need to be up early tomorrow, like half six" to "COMMAND: set an alarm for 6:30 am",
+            "who wrote pride and prejudice" to "Jane Austen wrote it, published in 1813.",
+        )
+        val turns = shots + history
+        return if (isGemma()) buildString {
+            append("<start_of_turn>user\n").append(system).append("<end_of_turn>\n<start_of_turn>model\nUnderstood.<end_of_turn>\n")
+            for ((u, a) in turns) append("<start_of_turn>user\n$u<end_of_turn>\n<start_of_turn>model\n$a<end_of_turn>\n")
+            append("<start_of_turn>user\n$user<end_of_turn>\n<start_of_turn>model\n")
+        } else buildString {
+            append("<|im_start|>system\n").append(system).append("<|im_end|>\n")
+            for ((u, a) in turns) append("<|im_start|>user\n$u<|im_end|>\n<|im_start|>assistant\n$a<|im_end|>\n")
+            append("<|im_start|>user\n$user<|im_end|>\n<|im_start|>assistant\n")
+        }
+    }
+
+    private fun isGemma() = com.nova.assistant.Prefs(ctx).modelUrl.contains("gemma", ignoreCase = true)
+
+    private fun clean(s: String) = s
+        .replace(Regex("<\\|?(im_end|im_start|end_of_turn|start_of_turn|eot_id)\\|?>.*", RegexOption.DOT_MATCHES_ALL), "")
+        .replace(Regex("[*_#`]"), "")
+        .replace(Regex("^(assistant|model|nova)\\s*:?\\s*", RegexOption.IGNORE_CASE), "")
+        .trim()
+
+    private fun remember(u: String, a: String) {
+        history += u to a
+        while (history.size > 3) history.removeAt(0)
+    }
+
+    companion object {
+        private val history = mutableListOf<Pair<String, String>>()
+    }
+}
