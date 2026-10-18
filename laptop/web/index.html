@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#050505">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Nova</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="top">
+    <div class="brand">
+      <span class="wordmark">NOVA</span>
+      <span class="status" id="status"><i></i><b>Connecting</b></span>
+    </div>
+    <div class="top-right">
+      <div class="devices" id="devices" aria-label="Connected devices"></div>
+      <button class="icon-btn" id="privacyBtn" aria-label="Privacy log">
+        <svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      </button>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="orb-wrap" id="orbWrap">
+      <canvas id="orb" aria-hidden="true"></canvas>
+    </div>
+    <p class="state" id="stateLabel">Tap to speak</p>
+    <button class="stop" id="stopBtn" hidden>
+      <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg> Stop
+    </button>
+    <div class="timers" id="timers"></div>
+    <section class="feed" id="feed" aria-live="polite"></section>
+  </main>
+
+  <footer class="dock">
+    <form class="ask" id="askForm" autocomplete="off">
+      <input id="askInput" placeholder="Ask Nova anything…" enterkeyhint="send" aria-label="Message Nova">
+      <button type="submit" class="send" aria-label="Send">
+        <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </form>
+    <button class="mic" id="micBtn" aria-label="Talk to Nova">
+      <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+  </footer>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <div class="sheet-backdrop" id="backdrop"></div>
+
+  <section class="sheet" id="confirmSheet" role="dialog" aria-modal="true" aria-labelledby="confirmText">
+    <p class="sheet-kicker">Nova needs your OK</p>
+    <p class="sheet-title" id="confirmText"></p>
+    <div class="sheet-actions">
+      <button class="btn ghost" id="confirmNo">Cancel</button>
+      <button class="btn solid" id="confirmYes">Allow</button>
+    </div>
+  </section>
+
+  <section class="sheet leak" id="leakSheet" role="alertdialog" aria-modal="true" aria-labelledby="leakTitle">
+    <p class="sheet-kicker">⚠ Data about to leave your laptop</p>
+    <p class="sheet-title" id="leakTitle"></p>
+    <ul class="leak-items" id="leakItems"></ul>
+    <div class="leak-bar"><i id="leakBar"></i></div>
+    <p class="fineprint" id="leakNote"></p>
+    <div class="sheet-actions">
+      <button class="btn ghost" id="leakAllow">Allow once</button>
+      <button class="btn solid" id="leakAbort">Abort</button>
+    </div>
+  </section>
+
+  <section class="sheet" id="privacySheet" role="dialog" aria-modal="true" aria-label="Privacy log">
+    <p class="sheet-kicker">Privacy log</p>
+    <p class="fineprint" style="margin-top:0">Your conversations and the AI model stay on this laptop. This is everything Nova sent out to the internet.</p>
+    <ul class="plog" id="plog"></ul>
+    <div class="sheet-actions">
+      <button class="btn solid" id="privacyDone">Done</button>
+    </div>
+  </section>
+
+  <section class="sheet" id="actionSheet" role="dialog" aria-modal="true">
+    <p class="sheet-kicker" id="actionKicker">Ready</p>
+    <p class="sheet-title" id="actionTitle"></p>
+    <div class="sheet-actions">
+      <button class="btn ghost" id="actionNo">Dismiss</button>
+      <a class="btn solid" id="actionGo" target="_blank" rel="noopener">Open</a>
+    </div>
+  </section>
+
+  <section class="sheet" id="settingsSheet" role="dialog" aria-modal="true" aria-label="Settings">
+    <p class="sheet-kicker">Settings</p>
+    <label class="row">
+      <span><b>Hands-free</b><small>Listen for “Nova…” without tapping</small></span>
+      <input type="checkbox" class="switch" id="optWake">
+    </label>
+    <label class="row">
+      <span><b>Light mode</b><small>Ivory &amp; ink instead of black &amp; pearl</small></span>
+      <input type="checkbox" class="switch" id="optLight">
+    </label>
+    <label class="row">
+      <span><b>Speak replies</b><small>Read Nova's answers aloud</small></span>
+      <input type="checkbox" class="switch" id="optSpeak" checked>
+    </label>
+    <label class="row col">
+      <span><b>Voice</b></span>
+      <select id="optVoice"></select>
+    </label>
+    <label class="row col">
+      <span><b>This device's name</b><small>Say “…on my <em>name</em>” to send things here</small></span>
+      <input id="optName" class="text" placeholder="phone">
+    </label>
+    <p class="fineprint" id="engineInfo"></p>
+    <div class="sheet-actions">
+      <button class="btn solid" id="settingsDone">Done</button>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

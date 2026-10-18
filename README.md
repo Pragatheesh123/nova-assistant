@@ -1,4 +1,10 @@
-# Nova for Android
+# Nova
+
+Two parts, both private and on-device:
+- **Phone:** the Android app below (download from **Releases**).
+- **PC:** the [`laptop`](laptop/README.md) folder: setup steps are in its README.
+
+## Nova for Android
 
 A private, Jarvis-style voice assistant that lives on your phone. Hold the power button (or say “Hey Nova”), and a
 small black panel pops up, listens, answers or does the task, then disappears. Everything, including the AI model,

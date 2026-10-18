@@ -3,6 +3,7 @@ name: Build Nova APK
 on:
   push:
     branches: [main]
+    paths-ignore: ["laptop/**", "*.md"]
   workflow_dispatch:
 
 permissions:

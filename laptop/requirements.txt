@@ -1,0 +1,10 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+httpx>=0.27
+cryptography>=42
+psutil>=5.9
+qrcode>=7.4
+pynput>=1.7
+# Local hearing (faster-whisper) is installed separately by start.bat / start.sh.
+# Optional: natural local voice. Also set NOVA_PIPER_VOICE to a downloaded .onnx voice.
+# piper-tts>=1.3
