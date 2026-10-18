@@ -25,7 +25,13 @@ jobs:
       - name: Build
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleRelease :hands:assembleRelease --stacktrace
+          set +e
+          ./gradlew :app:assembleRelease :hands:assembleRelease 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          set -e
+          # surface compile errors as annotations (readable without downloading logs)
+          grep -E "^e: |What went wrong|Could not resolve|Duplicate class" -A2 build.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+          [ "$status" -eq 0 ] || exit "$status"
           cp app/build/outputs/apk/release/app-release.apk Nova.apk
           cp hands/build/outputs/apk/release/hands-release.apk Nova-Hands.apk
 

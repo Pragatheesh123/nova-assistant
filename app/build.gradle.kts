@@ -73,6 +73,9 @@ dependencies {
     implementation("com.google.mediapipe:tasks-genai:0.10.24")
     // Cloud brain (Claude)
     implementation("com.anthropic:anthropic-java:2.73.0")
+    // Free brain (Groq) talks HTTP + JSON directly
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
     // Offline "Hey Nova" wake word
     implementation("com.alphacephei:vosk-android:0.3.75")
     implementation("net.java.dev.jna:jna:5.18.1@aar")
