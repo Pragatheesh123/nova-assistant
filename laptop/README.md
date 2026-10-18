@@ -23,9 +23,9 @@ The AI model, speech recognition and your notes all stay on your own machine. No
    Weaker laptop (8 GB RAM or less)? Use `ollama pull qwen3:4b` and set `NOVA_MODEL=qwen3:4b`.
 3. **Get Nova:** on GitHub open your `nova-assistant` repo → **Code → Download ZIP**, extract it, and open
    the `laptop` folder. (Updating? Copy the new files over the old ones, but keep your `.venv` folder.)
-4. **Claude (the brain):** get an API key at https://console.anthropic.com → **API keys** (add a little credit
-   under Billing). Start Nova (next step), then open **Settings → Claude API key**, paste it, **Save**. The status
-   at the top changes to **Claude Opus 5.5**. With a key, step 2 (Ollama) is optional.
+4. **Free brain (Groq):** go to https://console.groq.com, sign in (free, no card), open **API Keys** →
+   **Create API Key**. Start Nova (next step), open **Settings → Groq API key**, paste it, **Save**.
+   The status at the top changes to **Groq · free**. (Optional paid upgrade: a Claude key in the field below it.)
 5. **Start it:** double-click **`start.bat`**. The first run installs everything (a few minutes).
    Nova then opens in **its own window**. Allow the microphone when asked.
 6. **Chrome/Edge extension (tab control):** open `chrome://extensions` (or `edge://extensions`) → turn on
@@ -38,8 +38,9 @@ The AI model, speech recognition and your notes all stay on your own machine. No
 
 ## Brain, voice and feelings
 
-- **Brain:** Claude Opus 5.5 with web search, so answers are current. It plans multi-step tasks itself
-  ("open YouTube, play lofi and set volume to 30").
+- **Brain (free):** open models on Groq's free tier (GPT-OSS 120B, Llama 3.3 70B) with web search, so answers are
+  current. If one model's free limit runs out it switches to the next, and to Ollama/offline commands after that.
+  It plans multi-step tasks itself ("open YouTube, play lofi and set volume to 30").
 - **Emotion:** Nova hears *how* you speak (louder, quieter, faster, slower, higher or flatter than your usual)
   and passes that to Claude as a hint, along with your words. It learns your normal voice over your first few chats.
 - **Memory:** say things like "remember my sister is Priya" and Nova will use it later. Stored in `data/profile.json`.
@@ -47,7 +48,7 @@ The AI model, speech recognition and your notes all stay on your own machine. No
   say "good morning" to run it.
 - **Voice:** a British male neural voice (Piper "Alan") that runs offline. It downloads automatically (about 60 MB)
   the first time.
-- **Privacy:** your words go to Anthropic to be answered. The leak guard checks them first and pops up before
+- **Privacy:** your words go to Groq to be answered. The leak guard checks them first and pops up before
   sending card numbers, passwords, Aadhaar/PAN and so on.
 
 ## Browser control (all your tabs)

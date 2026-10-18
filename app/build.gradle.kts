@@ -12,8 +12,8 @@ android {
         applicationId = "com.nova.assistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "3.0"
+        versionCode = 6
+        versionName = "3.1"
         ndk { abiFilters += "arm64-v8a" } // every modern phone; keeps the app small
     }
 

@@ -117,10 +117,15 @@
       <select id="optVoice"></select>
     </label>
     <div class="row col" id="claudeRow" hidden>
-      <span><b>Claude API key</b><small>Nova's cloud brain. Get one at console.anthropic.com → API keys. Stored only on this laptop.</small></span>
+      <span><b>Groq API key (free brain)</b><small>Free at console.groq.com → API Keys, no card needed. Stored only on this laptop.</small></span>
       <div class="keyrow">
-        <input id="optClaude" class="text" type="password" placeholder="sk-ant-…" autocomplete="off">
-        <button class="btn solid" id="saveClaude" type="button">Save</button>
+        <input id="optGroq" class="text" type="password" placeholder="gsk_…" autocomplete="off">
+        <button class="btn solid" id="saveGroq" type="button">Save</button>
+      </div>
+      <span><small>Optional, paid: a Claude key (console.anthropic.com) makes Nova smarter. It's used instead of Groq if set.</small></span>
+      <div class="keyrow">
+        <input id="optClaude" class="text" type="password" placeholder="sk-ant-… (optional)" autocomplete="off">
+        <button class="btn ghost" id="saveClaude" type="button">Save</button>
       </div>
     </div>
     <label class="row col">

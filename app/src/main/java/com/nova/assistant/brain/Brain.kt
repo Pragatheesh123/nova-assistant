@@ -28,29 +28,40 @@ class Brain(private val ctx: Context) {
      * Nova falls back to its offline commands and on-device model.
      */
     suspend fun handle(text: String, onStep: (String) -> Unit = {}, cues: String = ""): Outcome {
-        val key = com.nova.assistant.Prefs(ctx).claudeKey
-        if (key.isNotBlank() && WebLookup.online(ctx)) {
+        val prefs = com.nova.assistant.Prefs(ctx)
+        val online = WebLookup.online(ctx)
+        if (online && (prefs.claudeKey.isNotBlank() || prefs.groqKey.isNotBlank())) {
+            val where = if (prefs.claudeKey.isNotBlank()) "Claude (the cloud)" else "Groq (the cloud)"
             val findings = Guard.scan(text)
-            if (findings.isNotEmpty()) return warn(findings, "Claude (the cloud)") { cloudTurn(key, text, onStep, cues) }
-            return cloudTurn(key, text, onStep, cues)
+            if (findings.isNotEmpty()) return warn(findings, where) { cloudTurn(text, onStep, cues) }
+            return cloudTurn(text, onStep, cues)
         }
         return handleLocal(text, onStep)
     }
 
-    // ------------------------------------------------------------------ cloud (Claude)
+    // ------------------------------------------------------------------ cloud (Groq free, or Claude)
 
-    private suspend fun cloudTurn(key: String, text: String, onStep: (String) -> Unit, cues: String): Outcome {
+    private suspend fun cloudTurn(text: String, onStep: (String) -> Unit, cues: String): Outcome {
         onStep("Thinking…")
-        val claude = claudeFor(key)
+        val prefs = com.nova.assistant.Prefs(ctx)
         val now = SimpleDateFormat("EEEE d MMMM yyyy, h:mm a", Locale.getDefault()).format(Date())
         val line = "[$now · on their phone" + (if (cues.isNotBlank()) " · voice: $cues" else "") + "]\n$text"
         val system = PhoneTools.PERSONA + profile.describe().let { if (it.isBlank()) "" else "\n\n$it" }
+        val run: suspend (String, Map<String, Any?>) -> String = { name, args -> runTool(name, args, onStep) }
         val reply = try {
-            claude.think(system, line, PhoneTools.SPECS, PhoneTools.isQuestion(text)) { name, args -> runTool(name, args, onStep) }
+            if (prefs.claudeKey.isNotBlank()) {
+                claudeFor(prefs.claudeKey).think(system, line, PhoneTools.SPECS, PhoneTools.isQuestion(text), run)
+            } else {
+                groqFor(prefs.groqKey).think(system, line, PhoneTools.SPECS, PhoneTools.isQuestion(text), { q ->
+                    onStep("Searching the web…")
+                    runCatching { WebLookup.lookup(q).text }.getOrDefault("Web search isn't available right now.")
+                }, run)
+            }
         } catch (i: ClaudeBrain.Interrupt) {
             return i.payload as Outcome
         }
-        return Outcome(reply)
+        // Free limits used up or no connection: the on-device brain takes this one.
+        return if (reply != null) Outcome(reply) else handleLocal(text, onStep)
     }
 
     /** Runs one tool Claude asked for and returns the result text it gets back. */
@@ -219,6 +230,15 @@ class Brain(private val ctx: Context) {
         private val history = mutableListOf<Pair<String, String>>()
         private var claude: ClaudeBrain? = null
         private var claudeKey = ""
+
+        private var groq: GroqBrain? = null
+        private var groqKey = ""
+
+        @Synchronized
+        fun groqFor(key: String): GroqBrain {
+            if (groq == null || groqKey != key) { groq = GroqBrain(key); groqKey = key }
+            return groq!!
+        }
 
         @Synchronized
         fun claudeFor(key: String): ClaudeBrain {

@@ -118,7 +118,7 @@
         $("claudeRow").hidden = !me.local;
         if (!settings.name) $("optName").placeholder = me.name;
         $("engineInfo").textContent =
-          `Brain: ${m.cloud ? m.model + " (cloud)" : m.llm ? m.model + " via Ollama" : "offline rules (add a Claude key or start Ollama)"}. ` +
+          `Brain: ${m.cloud ? m.model : m.llm ? m.model + " via Ollama" : "offline rules (add a free Groq key)"}. ` +
           `Hearing: ${m.stt ? "Whisper on your laptop" : "browser speech recognition"}. ` +
           `Voice: ${m.tts ? "Piper on your laptop" : "this device's built-in voice"}.`;
         setState("idle");
@@ -134,7 +134,7 @@
       case "notice": toast(m.text); break;
       case "brain":
         $("status").querySelector("b").textContent = m.cloud ? m.model : "Basic mode";
-        toast(m.cloud ? "Claude connected" : "Key removed");
+        toast(m.cloud ? m.model + " connected" : "Key removed");
         break;
       case "summon": unlockAudio(); chime(); if (state !== "listening") talk(); break;
       case "action": runAction(m.action, m.args || {}); break;
@@ -645,10 +645,8 @@
   $("optSpeak").checked = settings.speak;
   $("optName").value = settings.name;
   $("settingsBtn").onclick = () => openSheet("settingsSheet");
-  $("saveClaude").onclick = () => {
-    send({ type: "set_key", key: $("optClaude").value.trim() });
-    $("optClaude").value = "";
-  };
+  $("saveGroq").onclick = () => { send({ type: "set_key", provider: "groq", key: $("optGroq").value.trim() }); $("optGroq").value = ""; };
+  $("saveClaude").onclick = () => { send({ type: "set_key", provider: "anthropic", key: $("optClaude").value.trim() }); $("optClaude").value = ""; };
   $("settingsDone").onclick = closeSheets;
   $("optLight").onchange = (e) => {
     settings.light = e.target.checked; store.set("light", settings.light);

@@ -159,7 +159,7 @@ async def handle(origin, text, cues=""):
 
     await safe_send(origin, {"type": "state", "state": "thinking"})
     # Everything you say goes to Claude: check it for sensitive data first.
-    if brain.cloud() and not await ctx.guard("message to Claude", "Anthropic (Claude)", text):
+    if brain.cloud() and not await ctx.guard("message to the cloud brain", brain.cloud_name(), text):
         await safe_send(origin, {"type": "reply", "text": "Okay, I didn't send that anywhere."})
         return
     try:
@@ -172,7 +172,7 @@ async def handle(origin, text, cues=""):
 
 
 def brain_name():
-    return "Claude Opus 5.5" if brain.cloud() else config.MODEL
+    return brain.cloud_name() or config.MODEL
 
 
 def same_origin(ws: WebSocket) -> bool:
@@ -214,7 +214,7 @@ async def ws_endpoint(ws: WebSocket):
                 tasks[dev.id] = asyncio.create_task(handle(dev, msg["text"].strip(), str(msg.get("cues", ""))[:120]))
             elif msg.get("type") == "set_key" and dev.local:  # only from this laptop
                 from .claude import save_key
-                save_key(str(msg.get("key", "")))
+                save_key(str(msg.get("key", "")), "groq" if msg.get("provider") == "groq" else "anthropic")
                 await ws.send_json({"type": "brain", "cloud": bool(brain.cloud()), "model": brain_name()})
             elif msg.get("type") == "abort":
                 for f in list(pending.values()):

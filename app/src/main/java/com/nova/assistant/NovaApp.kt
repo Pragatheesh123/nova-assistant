@@ -60,6 +60,12 @@ class Prefs(context: Context) {
         get() = p.getLong("voskDl", -1)
         set(v) = p.edit().putLong("voskDl", v).apply()
 
+    /** Free cloud brain (Groq). */
+    var groqKey: String
+        get() = p.getString("groqKey", "") ?: ""
+        set(v) = p.edit().putString("groqKey", v.trim()).apply()
+
+    /** Optional paid brain (Claude); used instead of Groq when set. */
     var claudeKey: String
         get() = p.getString("claudeKey", "") ?: ""
         set(v) = p.edit().putString("claudeKey", v.trim()).apply()

@@ -128,7 +128,7 @@ class MainActivity : ComponentActivity() {
         var uk by remember { mutableStateOf(prefs.britishVoice) }
         var copying by remember { mutableStateOf(false) }
         var keyText by remember { mutableStateOf("") }
-        var hasKey by remember { mutableStateOf(prefs.claudeKey.isNotBlank()) }
+        var hasKey by remember { mutableStateOf(prefs.claudeKey.isNotBlank() || prefs.groqKey.isNotBlank()) }
         var voiceLabel by remember { mutableStateOf(prefs.voiceName.ifEmpty { "Automatic (British male)" }) }
 
         val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { tick++ }
@@ -242,11 +242,12 @@ class MainActivity : ComponentActivity() {
             }
 
             Step(
-                n = 2, done = hasKey, title = "Cloud brain · Claude",
-                text = if (hasKey) "Connected. Nova thinks with Claude: real conversation, web search, emotion-aware replies. " +
-                    "Your words go to Anthropic to be answered; the leak guard checks them first."
-                else "Paste your Anthropic API key (console.anthropic.com › API keys). It's stored only on this phone. " +
-                    "Without it Nova uses offline commands.",
+                n = 2, done = hasKey, title = "Free cloud brain · Groq",
+                text = if (hasKey) (if (prefs.claudeKey.isNotBlank()) "Using Claude (your paid key). " else "Connected to Groq's free AI. ") +
+                    "Real conversation and web search; your words are checked by the leak guard before they're sent. " +
+                    "If the free limit runs out, the offline brain takes over."
+                else "Free, no card: on console.groq.com sign in, open API Keys, create a key and paste it here. " +
+                    "It's stored only on this phone. Optional paid upgrade: a Claude key (starts with sk-ant-).",
             ) {
                 if (!hasKey) {
                     Box(
@@ -256,7 +257,7 @@ class MainActivity : ComponentActivity() {
                             .border(1.dp, Nova.Line, RoundedCornerShape(14.dp))
                             .padding(horizontal = 14.dp, vertical = 14.dp),
                     ) {
-                        if (keyText.isEmpty()) Text("sk-ant-…", style = Nova.body.copy(color = Nova.Pearl3))
+                        if (keyText.isEmpty()) Text("gsk_…  (or sk-ant-…)", style = Nova.body.copy(color = Nova.Pearl3))
                         BasicTextField(
                             value = keyText, onValueChange = { keyText = it.trim() }, singleLine = true,
                             textStyle = TextStyle(color = Nova.Pearl, fontSize = 15.sp),
@@ -267,10 +268,15 @@ class MainActivity : ComponentActivity() {
                     }
                     Spacer(Modifier.height(10.dp))
                     Pill("Save key", solid = true, Modifier.fillMaxWidth()) {
-                        if (keyText.startsWith("sk-")) { prefs.claudeKey = keyText; keyText = ""; hasKey = true }
+                        when {
+                            keyText.startsWith("sk-ant") -> { prefs.claudeKey = keyText; keyText = ""; hasKey = true }
+                            keyText.startsWith("gsk_") -> { prefs.groqKey = keyText; keyText = ""; hasKey = true }
+                        }
                     }
                 } else {
-                    Pill("Remove key", solid = false, Modifier.fillMaxWidth()) { prefs.claudeKey = ""; hasKey = false }
+                    Pill("Remove key", solid = false, Modifier.fillMaxWidth()) {
+                        prefs.claudeKey = ""; prefs.groqKey = ""; hasKey = false
+                    }
                 }
             }
 

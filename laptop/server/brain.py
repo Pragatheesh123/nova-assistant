@@ -49,20 +49,31 @@ class Brain:
         return self.llm_ok
 
     def cloud(self):
-        """Claude brain if an API key is configured, else None (local Ollama brain)."""
+        """The cloud brain: Claude if you added a (paid) key, else Groq (free), else None (local)."""
         from .claude import ClaudeBrain, load_key
-        key = load_key()
-        if not key:
-            return None
-        if getattr(self, "_claude_key", None) != key:
-            self._claude, self._claude_key = ClaudeBrain(key), key
-        return self._claude
+        from .groq import GroqBrain
+        for provider, cls in (("anthropic", ClaudeBrain), ("groq", GroqBrain)):
+            key = load_key(provider)
+            if key:
+                if getattr(self, "_cloud_key", None) != (provider, key):
+                    self._cloud, self._cloud_key = cls(key), (provider, key)
+                return self._cloud
+        return None
+
+    def cloud_name(self):
+        c = self.cloud()
+        if c is None:
+            return ""
+        return "Claude Opus 5.5" if type(c).__name__ == "ClaudeBrain" else "Groq · free"
 
     async def think(self, text, origin, devices, execute, cues=""):
         """execute(tool_name, args) -> str result. Returns Nova's spoken reply."""
-        claude = self.cloud()
-        if claude:
-            return await claude.think(text, origin, devices, execute, cues)
+        cloud = self.cloud()
+        if cloud:
+            reply = await cloud.think(text, origin, devices, execute, cues)
+            if reply is not None:
+                return reply
+            print("Cloud brain unavailable (limit or network); using the local brain for this one.")
         # Instant path: simple device commands never wait for the model.
         quick = await self._offline(text, execute, quick=True)
         if quick:

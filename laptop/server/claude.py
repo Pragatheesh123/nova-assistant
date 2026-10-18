@@ -155,15 +155,20 @@ def key_path():
     return config.DATA / "secrets.json"
 
 
-def load_key():
-    import os
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return os.environ["ANTHROPIC_API_KEY"]
+def _secrets():
     try:
-        return json.loads(key_path().read_text()).get("anthropic_api_key", "")
+        return json.loads(key_path().read_text())
     except Exception:
-        return ""
+        return {}
 
 
-def save_key(key):
-    key_path().write_text(json.dumps({"anthropic_api_key": key.strip()}))
+def load_key(provider="anthropic"):
+    import os
+    env = {"anthropic": "ANTHROPIC_API_KEY", "groq": "GROQ_API_KEY"}[provider]
+    return os.environ.get(env) or _secrets().get(f"{provider}_api_key", "")
+
+
+def save_key(key, provider="anthropic"):
+    s = _secrets()
+    s[f"{provider}_api_key"] = key.strip()
+    key_path().write_text(json.dumps(s))
